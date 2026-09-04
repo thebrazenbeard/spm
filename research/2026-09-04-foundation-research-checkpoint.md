@@ -23,8 +23,15 @@ Started from `work/llm-failure-foundation-20260904@40c82a610a3ed75965c719568369b
 - `docs/17-causal-representation-and-interpretability-research.md`
 - `docs/18-ambiguity-and-uncertainty-research.md`
 - `docs/19-learning-objectives-and-benchmark-methodology-research.md`
+- `docs/20-foundation-synthesis.md`
 
-The predecessor branch already contains `docs/06-llm-failure-foundation.md`, which is the explicit LLM-failure foundation for this research program.
+The predecessor branch contains `docs/06-llm-failure-foundation.md`, the explicit LLM-failure foundation for this research program.
+
+README and `docs/05-research-roadmap.md` have been updated to index the survey and move the program from generic literature review toward a falsifiable V0 benchmark/prototype sequence.
+
+## Current saved head at checkpoint update
+
+Prior to this checkpoint write, branch readback was `5e35c88cb7c033997e4ae64dd06fc712225cd0be` (`Advance SPM roadmap after foundation literature survey`). This checkpoint update advances the branch again; use fresh branch readback for the next exact head.
 
 ## Parallel worker research
 
@@ -40,33 +47,24 @@ Assigned through `bus/vera-sol-v1/messages/0031-vera-spm-foundation-parallel-res
 
 Workers were instructed not to edit SPM directly; Vera remains single integrator and will ingest cited research packets from Bus after independent review.
 
+At the most recent poll, One and Three had not yet advanced beyond their earlier R10A0 work. No worker packet has yet been incorporated.
+
 ## Ordered foundation pass now completed locally
 
-The requested ordered foundation topics are now represented through dedicated saved notes:
+The requested ordered foundation topics are represented through dedicated saved notes, and `docs/20-foundation-synthesis.md` now maps the LLM failure families onto those literatures.
 
-1. formal/dynamic semantics;
-2. reference/discourse;
-3. pragmatics;
-4. speech acts/conversational repair;
-5. common ground/theory of mind;
-6. psycholinguistic situation models;
-7. mental-model/event cognition;
-8. computational semantics/dialogue state;
-9. world/latent-state learning;
-10. neural-symbolic/structured representation;
-11. causal representation/interpretability;
-12. ambiguity/uncertainty;
-13. learning objectives/benchmark methodology.
+The strongest provisional research result is **not an accepted architecture**: persistent uncertainty-bearing entity/referent state plus local correction/supersession is currently the best first experiment family because it has strong cross-literature ancestry, clean causal intervention tests, strong conventional baselines, and does not require solving full pragmatics first.
 
-## Still pending before architecture selection
+## Still pending before any training
 
-1. deeper synthesis of the LLM failure foundation against all researched ancestor literatures;
-2. ingest worker packets and preserve disagreements/cautions;
-3. update SPM roadmap/README/index after the research sequence stabilizes;
-4. derive candidate SPM V0 vocabulary/state schema;
-5. derive SPM V0 benchmark schema and seed cases;
-6. select the smallest falsifiable architecture intervention only after synthesis;
-7. write matched-baseline experiment specification before any training.
+1. ingest worker packets and preserve disagreements/cautions;
+2. convert the synthesis into a compact operational SPM V0 vocabulary/state contract;
+3. define the SPM V0 benchmark schema;
+4. generate and independently validate the first controlled benchmark cases;
+5. run matched conventional/open-weight LLM baselines plus prompting/structured-state/post-training variants;
+6. revise the candidate mechanism based on empirical failure attribution;
+7. write an exact matched-baseline experiment specification;
+8. only then implement/train the minimum model intervention.
 
 ## Research discipline carried forward
 
@@ -81,6 +79,6 @@ For every SPM-motivating failure, test competing explanations before calling it 
 - runtime/tooling deficit;
 - evaluation artifact.
 
-Every proposed explicit state variable must ultimately pass causal intervention/ablation tests. Decodability alone is not enough.
+Every proposed explicit state variable must pass causal intervention/ablation tests. Decodability alone is not enough.
 
 SPM remains model-class research, not Vera identity/runtime architecture. Vera-derived examples may seed generalized tests, but private/relational material is not copied into the repo by default.
