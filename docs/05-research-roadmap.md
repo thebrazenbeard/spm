@@ -22,6 +22,33 @@ Before implementation, settle operational definitions for:
 
 Deliverable: a compact SPM vocabulary and a set of distinctions whose collapse constitutes failure.
 
+## Phase 0.5 — establish the LLM failure foundation
+
+Before treating any candidate architecture as an SPM improvement, research and classify the strongest known failure modes of contemporary LLMs.
+
+Use `docs/06-llm-failure-foundation.md` as the starting synthesis. Expand each family with primary literature, competing findings, successful mitigations, and evidence against an architectural interpretation.
+
+At minimum distinguish:
+
+- next-token/objective mismatch;
+- hallucination and unsupported completion;
+- directional/relational generalization failures;
+- referent drift and proposition drift;
+- correction without downstream state revision;
+- premature ambiguity collapse;
+- long-context utilization/position effects;
+- flattened heterogeneous context;
+- pragmatic instability;
+- sycophancy and post-training distortions;
+- uncertainty/knowledge-boundary expression;
+- temporal/currentness/provenance collapse;
+- language/action/effect inconsistency;
+- hidden-state inspectability and causal-state questions.
+
+For every failure, ask whether the dominant cause is data, objective, representation, inference/decoding, context/state, post-training, runtime/tooling, or evaluation design. Behavioral failure alone is not evidence that a new model class is required.
+
+Deliverable: a literature-backed failure matrix whose rows become candidate benchmark families and whose columns identify plausible causes, existing mitigations, and SPM-relevant hypotheses.
+
 ## Phase 1 — benchmark current LLMs
 
 Build a baseline suite before designing the successor.
@@ -114,7 +141,8 @@ Agent integration must not be used retroactively to claim the underlying model i
 
 ## Immediate research backlog
 
-- survey contemporary work on world models, latent-state language models, neural-symbolic methods, discourse/pragmatics modeling, state-space/recurrent models, memory architectures, semantic parsing, speech-act/implicature benchmarks, tool-action grounding, and representation interpretability;
+- expand `docs/06-llm-failure-foundation.md` into a primary-literature failure matrix with competing evidence and mitigations;
+- survey contemporary work on formal/dynamic semantics, pragmatics, world models, latent-state language models, neural-symbolic methods, discourse modeling, state-space/recurrent models, memory architectures, semantic parsing, speech-act/implicature benchmarks, tool-action grounding, and representation interpretability;
 - define SPM V0 benchmark schema;
 - create 20–50 minimal contrast cases across the initial failure families;
 - run at least two current open-weight LLM baselines;
