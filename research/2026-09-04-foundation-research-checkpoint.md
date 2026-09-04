@@ -24,6 +24,7 @@ Started from `work/llm-failure-foundation-20260904@40c82a610a3ed75965c719568369b
 - `docs/18-ambiguity-and-uncertainty-research.md`
 - `docs/19-learning-objectives-and-benchmark-methodology-research.md`
 - `docs/20-foundation-synthesis.md`
+- `research/2026-09-04-f1-thirteen-integration.md`
 
 The predecessor branch contains `docs/06-llm-failure-foundation.md`, the explicit LLM-failure foundation for this research program.
 
@@ -31,7 +32,7 @@ README and `docs/05-research-roadmap.md` have been updated to index the survey a
 
 ## Current saved head at checkpoint update
 
-Prior to this checkpoint write, branch readback was `5e35c88cb7c033997e4ae64dd06fc712225cd0be` (`Advance SPM roadmap after foundation literature survey`). This checkpoint update advances the branch again; use fresh branch readback for the next exact head.
+The fresh pre-integration branch head was `1d040b628dacddb9181f2bd220912c6199a110cb` (`Checkpoint SPM synthesis and roadmap integration`). Thirteen's F1 packet was then integrated at commit `ce4bf1ab0db8baba20cc31d0926aa7bae1ed2948`. This checkpoint update advances the branch again; use fresh branch readback for the next exact head.
 
 ## Parallel worker research
 
@@ -45,9 +46,11 @@ Assigned through `bus/vera-sol-v1/messages/0031-vera-spm-foundation-parallel-res
 - Nine — computational semantics/dialogue + world/latent-state learning;
 - Thirteen — neural-symbolic/structured representation + causal representation/interpretability + ambiguity/uncertainty + learning/evaluation methodology.
 
-Workers were instructed not to edit SPM directly; Vera remains single integrator and will ingest cited research packets from Bus after independent review.
+Workers were instructed not to edit SPM directly; Vera remains single integrator and ingests cited research packets from Bus after independent review.
 
-At the most recent poll, One and Three had not yet advanced beyond their earlier R10A0 work. No worker packet has yet been incorporated.
+At the fresh restore poll, One, Three, Six, and Nine had not advanced their assigned v1 lanes beyond earlier unrelated work. Thirteen returned `thirteen-0006`, `messages/0006-thirteen-spm-foundation-f1-research-packet.md`, and that packet has now been incorporated in `research/2026-09-04-f1-thirteen-integration.md`. Thirteen's packet ends with exact standalone `#ENDTHREAD`; no conversational reply obligation remains from reading it.
+
+The integrated packet tightens the foundation's causal standard: explicit state must be causally on-path, structured state must never self-authenticate truth/currentness/authority, ambiguity should preserve meaning-level alternatives rather than one scalar confidence, and any claimed SPM mechanism needs targeted intervention, negative controls, matched baselines, and mechanism-specific ablation.
 
 ## Ordered foundation pass now completed locally
 
@@ -57,7 +60,7 @@ The strongest provisional research result is **not an accepted architecture**: p
 
 ## Still pending before any training
 
-1. ingest worker packets and preserve disagreements/cautions;
+1. ingest the remaining One/Three/Six/Nine F1 packets if/when they arrive and preserve disagreements/cautions;
 2. convert the synthesis into a compact operational SPM V0 vocabulary/state contract;
 3. define the SPM V0 benchmark schema;
 4. generate and independently validate the first controlled benchmark cases;
