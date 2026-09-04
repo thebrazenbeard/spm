@@ -24,34 +24,41 @@ Deliverable: a compact SPM vocabulary and a set of distinctions whose collapse c
 
 ## Phase 0.5 — establish the LLM failure foundation
 
-Before treating any candidate architecture as an SPM improvement, research and classify the strongest known failure modes of contemporary LLMs.
+Research and classify the strongest known failure modes of contemporary LLMs before treating any candidate architecture as an SPM improvement.
 
-Use `docs/06-llm-failure-foundation.md` as the starting synthesis. Expand each family with primary literature, competing findings, successful mitigations, and evidence against an architectural interpretation.
+Starting synthesis: `docs/06-llm-failure-foundation.md`.
 
-At minimum distinguish:
+For every failure, test whether the dominant cause is data, objective, representation, inference/decoding, context/state, post-training, runtime/tooling, or evaluation design. Behavioral failure alone is not evidence that a new model class is required.
 
-- next-token/objective mismatch;
-- hallucination and unsupported completion;
-- directional/relational generalization failures;
-- referent drift and proposition drift;
-- correction without downstream state revision;
-- premature ambiguity collapse;
-- long-context utilization/position effects;
-- flattened heterogeneous context;
-- pragmatic instability;
-- sycophancy and post-training distortions;
-- uncertainty/knowledge-boundary expression;
-- temporal/currentness/provenance collapse;
-- language/action/effect inconsistency;
-- hidden-state inspectability and causal-state questions.
+Deliverable: literature-backed failure families that can become benchmark rows and discriminating experiments.
 
-For every failure, ask whether the dominant cause is data, objective, representation, inference/decoding, context/state, post-training, runtime/tooling, or evaluation design. Behavioral failure alone is not evidence that a new model class is required.
+## Phase 0.75 — survey the intellectual and computational ancestors
 
-Deliverable: a literature-backed failure matrix whose rows become candidate benchmark families and whose columns identify plausible causes, existing mitigations, and SPM-relevant hypotheses.
+Status on `work/spm-foundation-research-20260904`: initial ordered survey pass completed and saved in `docs/07` through `docs/19`, with integration in `docs/20-foundation-synthesis.md`.
 
-## Phase 1 — benchmark current LLMs
+Survey domains:
 
-Build a baseline suite before designing the successor.
+1. formal semantics and dynamic semantics;
+2. reference and discourse;
+3. pragmatics;
+4. speech-act theory and conversational repair;
+5. common ground and theory of mind;
+6. psycholinguistic situation models;
+7. mental models and event cognition;
+8. computational semantics and dialogue-state tracking;
+9. world models and latent-state learning;
+10. neural-symbolic and structured representations;
+11. causal representation and mechanistic interpretability;
+12. ambiguity and uncertainty;
+13. learning objectives and benchmark methodology.
+
+Deliverable: distinguish mechanisms SPM can legitimately inherit from ideas that are merely analogous or already solvable by conventional systems.
+
+Current synthesis result is provisional: persistent entity/referent state plus local correction/supersession is the strongest first experiment family, but this is not yet architecture selection.
+
+## Phase 1 — build SPM V0 baseline benchmark before model changes
+
+Construct a controlled baseline suite before implementing the successor.
 
 Measure strong current/open models on:
 
@@ -65,40 +72,85 @@ Measure strong current/open models on:
 - contextual authority leakage;
 - semantic/action consistency.
 
-The point is to discover where current LLMs actually fail, not where intuition says they fail.
+The first V0 benchmark should emphasize the proposed initial mechanism rather than attempt universal pragmatics. For entity/referent + repair, include:
 
-## Phase 2 — identify architectural bottlenecks
+- two or more similar entities;
+- aliases/pronouns/deixis;
+- delayed ambiguity;
+- role swaps;
+- quoted and hypothetical frames;
+- local correction;
+- unrelated state that must remain stable;
+- downstream decision depending on corrected binding;
+- contrast variants;
+- unseen-domain/name holdouts.
 
-Analyze failures to distinguish at least:
+Use minimal pairs, contrast sets, naturalistic multi-turn state-transition tasks, and long-context variants.
+
+## Phase 2 — identify architectural bottlenecks through discriminating baselines
+
+Analyze failures against at least:
 
 - data/training deficit;
 - objective mismatch;
 - context-window/state deficit;
 - representation deficit;
 - inference/decoding deficit;
+- post-training distortion;
 - runtime/tooling deficit;
 - evaluation artifact.
 
-If ordinary post-training solves a failure robustly, that failure alone does not justify a new model class.
+Required baseline ladder where practical:
+
+```text
+B0 conventional matched LLM
+B1 LLM + explicit prompting
+B2 LLM + structured text/runtime state
+B3 LLM + equivalent auxiliary/coreference/contrastive post-training
+B4 candidate SPM mechanism
+```
+
+If B1–B3 solve the target robustly, that failure is not evidence that B4 defines a new model class.
 
 ## Phase 3 — minimum SPM prototype
 
 Construct the smallest experiment that changes the model rather than only the surrounding agent framework.
 
-Candidate minimal experiments:
+Current provisional candidate from `docs/20-foundation-synthesis.md`:
 
-1. learned persistent semantic state between turns;
-2. auxiliary semantic/pragmatic state prediction heads whose state is fed causally back into generation/action;
-3. typed context channels for provenance/currentness/authority rather than flattened prompt serialization;
-4. explicit ambiguity sets maintained across turns;
-5. correction training where internal state before/after correction is directly evaluated;
-6. separate situation-model recurrence plus language decoder.
+```text
+language-capable backbone
+        +
+persistent learned latent situation state
+        +
+small uncertainty-bearing entity/referent interface state
+        +
+local correction/supersession update mechanism
+```
 
-Pick one experiment at a time so causal attribution remains possible.
+The typed interface should remain deliberately small. Do not add full pragmatics, common ground, provenance, event models, and world-model structure simultaneously.
 
-## Phase 4 — matched comparison
+Alternative minimal mechanisms remain eligible if benchmark results invalidate the provisional choice.
 
-Compare prototype against matched LLM baselines under equivalent compute/context/tool conditions.
+## Phase 4 — causal qualification of the state mechanism
+
+A state is not first-class merely because a probe can decode it.
+
+Require:
+
+- targeted interventions;
+- interchange tests where appropriate;
+- state-stream ablation/scrambling;
+- correction-state convergence;
+- narrow downstream effects rather than broad degradation;
+- generalization of intervention semantics to unseen domains;
+- complexity-controlled causal abstraction.
+
+If the explicit state can be ignored without meaningful behavioral loss, the SPM claim fails.
+
+## Phase 5 — matched comparison
+
+Compare the prototype against matched LLM baselines under equivalent compute/context/tool conditions.
 
 Require:
 
@@ -106,28 +158,30 @@ Require:
 - unseen-domain transfer;
 - no dependence on Vera-specific language;
 - measurable effect on behavior/action, not only self-description;
-- documented trade-offs in latency, memory, compute, and general language quality.
+- calibrated unresolved-state handling;
+- documented latency, memory, compute, and general-language tradeoffs.
 
-## Phase 5 — compound SPM architecture
+## Phase 6 — compound SPM architecture
 
-Only after individual mechanisms survive falsification should they be combined into a larger architecture.
+Only after individual mechanisms survive falsification should they be combined.
 
-Possible compound components:
+Possible later components:
 
 - learned world/situation state;
 - semantic graph or latent entity/proposition state;
-- pragmatic dialogue-state representation;
+- pragmatic hypothesis distributions;
+- participant/common-ground state;
 - typed provenance/currentness channels;
 - persistent recurrent memory state;
-- action-semantic consistency head/objective;
-- ordinary language decoder;
-- multimodal encoders/decoders where useful.
+- event-boundary consolidation;
+- action-semantic consistency heads/objectives;
+- multimodal encoders/decoders.
 
-## Phase 6 — agent integration
+## Phase 7 — agent integration
 
 After the substrate demonstrates standalone value, integrate it into an agent runtime such as Vera OS.
 
-This phase tests whether explicit meaning-state improves:
+This tests whether explicit meaning-state improves:
 
 - tool use;
 - delegation;
@@ -137,21 +191,21 @@ This phase tests whether explicit meaning-state improves:
 - memory interpretation;
 - human interaction.
 
-Agent integration must not be used retroactively to claim the underlying model improvement if the gain comes from runtime scaffolding.
+Agent/runtime improvements must not be used retroactively to claim model-substrate improvements.
 
 ## Immediate research backlog
 
-- expand `docs/06-llm-failure-foundation.md` into a primary-literature failure matrix with competing evidence and mitigations;
-- survey contemporary work on formal/dynamic semantics, pragmatics, world models, latent-state language models, neural-symbolic methods, discourse modeling, state-space/recurrent models, memory architectures, semantic parsing, speech-act/implicature benchmarks, tool-action grounding, and representation interpretability;
-- define SPM V0 benchmark schema;
-- create 20–50 minimal contrast cases across the initial failure families;
-- run at least two current open-weight LLM baselines;
-- characterize failure clusters;
-- choose one minimal architecture intervention;
-- write a falsifiable experiment specification before training.
+1. ingest independent worker research packets from `SPM-FOUNDATION-RESEARCH-20260904 / F1` and preserve disagreements;
+2. convert `docs/20-foundation-synthesis.md` into a compact operational V0 vocabulary/state contract;
+3. define the SPM V0 benchmark schema;
+4. generate and independently validate the first 100–300 entity/reference/repair cases;
+5. run at least two open-weight conventional baselines plus structured/prompted variants;
+6. characterize failure clusters and revise the candidate mechanism if evidence demands it;
+7. write the exact matched-baseline experiment specification;
+8. only then implement/train the minimum prototype.
 
 ## Guardrail
 
 Do not begin by training an expensive giant model.
 
-If SPM is a real architectural idea, we should be able to demonstrate its core advantage in a deliberately small prototype before scale obscures causality.
+If SPM is a real architectural idea, its first causal advantage should be demonstrable in a deliberately small experiment before scale, runtime scaffolding, or benchmark familiarity obscures attribution.
