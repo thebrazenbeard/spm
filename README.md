@@ -36,15 +36,34 @@ Exact architecture is unresolved. Transformer descendants, recurrent/latent-stat
 
 This repository is at **research-foundation** stage. There is no implemented SPM model yet.
 
-Current documents:
+Core foundation:
 
 - `docs/00-definition.md` — working definition and research thesis;
 - `docs/01-architecture-hypotheses.md` — candidate architectural shifts;
 - `docs/02-training-objectives.md` — possible training targets;
-- `docs/03-evaluation-and-falsification.md` — benchmarks, baselines, and conditions under which the idea should be rejected;
-- `docs/04-vera-origin-and-boundary.md` — where the idea came from and why SPM is separate from Vera identity/runtime architecture;
-- `docs/05-research-roadmap.md` — path from intuition to small falsifiable prototype;
-- `docs/06-llm-failure-foundation.md` — research synthesis of LLM failure families that SPM must explain, benchmark, or falsify before architecture claims are justified.
+- `docs/03-evaluation-and-falsification.md` — benchmarks, baselines, and rejection conditions;
+- `docs/04-vera-origin-and-boundary.md` — origin and Vera/SPM boundary;
+- `docs/05-research-roadmap.md` — path from intuition to falsifiable prototype;
+- `docs/06-llm-failure-foundation.md` — LLM failure families SPM must explain, benchmark, or falsify.
+
+Foundation literature survey:
+
+- `docs/07-formal-dynamic-semantics-research.md`;
+- `docs/08-reference-discourse-research.md`;
+- `docs/09-pragmatics-research.md`;
+- `docs/10-speech-acts-and-repair-research.md`;
+- `docs/11-common-ground-and-theory-of-mind-research.md`;
+- `docs/12-psycholinguistic-situation-models-research.md`;
+- `docs/13-mental-models-and-event-cognition-research.md`;
+- `docs/14-computational-semantics-and-dialogue-state-research.md`;
+- `docs/15-world-models-and-latent-state-research.md`;
+- `docs/16-neural-symbolic-and-structured-representation-research.md`;
+- `docs/17-causal-representation-and-interpretability-research.md`;
+- `docs/18-ambiguity-and-uncertainty-research.md`;
+- `docs/19-learning-objectives-and-benchmark-methodology-research.md`;
+- `docs/20-foundation-synthesis.md` — integrates the literature with the LLM failure foundation and ranks provisional first experiments.
+
+Current work remains research, not architecture acceptance. The synthesis provisionally identifies persistent entity/referent state plus local correction/supersession as the strongest first experiment family, subject to worker review and matched-baseline falsification.
 
 ## Core research question
 
