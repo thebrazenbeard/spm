@@ -20,6 +20,9 @@ Started from `work/llm-failure-foundation-20260904@40c82a610a3ed75965c719568369b
 - `docs/14-computational-semantics-and-dialogue-state-research.md`
 - `docs/15-world-models-and-latent-state-research.md`
 - `docs/16-neural-symbolic-and-structured-representation-research.md`
+- `docs/17-causal-representation-and-interpretability-research.md`
+- `docs/18-ambiguity-and-uncertainty-research.md`
+- `docs/19-learning-objectives-and-benchmark-methodology-research.md`
 
 The predecessor branch already contains `docs/06-llm-failure-foundation.md`, which is the explicit LLM-failure foundation for this research program.
 
@@ -37,15 +40,33 @@ Assigned through `bus/vera-sol-v1/messages/0031-vera-spm-foundation-parallel-res
 
 Workers were instructed not to edit SPM directly; Vera remains single integrator and will ingest cited research packets from Bus after independent review.
 
-## Still pending in the ordered foundation pass
+## Ordered foundation pass now completed locally
 
-1. causal representation and interpretability;
-2. ambiguity and uncertainty representation;
-3. learning objectives and benchmark methodology;
-4. deeper synthesis of the LLM failure foundation against all researched ancestor literatures;
-5. integrate worker packets and preserve disagreements/cautions;
-6. update SPM roadmap/README/index after the research sequence stabilizes;
-7. derive candidate SPM V0 state schema, benchmark schema, and smallest falsifiable architecture intervention only after the foundation synthesis.
+The requested ordered foundation topics are now represented through dedicated saved notes:
+
+1. formal/dynamic semantics;
+2. reference/discourse;
+3. pragmatics;
+4. speech acts/conversational repair;
+5. common ground/theory of mind;
+6. psycholinguistic situation models;
+7. mental-model/event cognition;
+8. computational semantics/dialogue state;
+9. world/latent-state learning;
+10. neural-symbolic/structured representation;
+11. causal representation/interpretability;
+12. ambiguity/uncertainty;
+13. learning objectives/benchmark methodology.
+
+## Still pending before architecture selection
+
+1. deeper synthesis of the LLM failure foundation against all researched ancestor literatures;
+2. ingest worker packets and preserve disagreements/cautions;
+3. update SPM roadmap/README/index after the research sequence stabilizes;
+4. derive candidate SPM V0 vocabulary/state schema;
+5. derive SPM V0 benchmark schema and seed cases;
+6. select the smallest falsifiable architecture intervention only after synthesis;
+7. write matched-baseline experiment specification before any training.
 
 ## Research discipline carried forward
 
