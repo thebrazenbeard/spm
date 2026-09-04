@@ -43,7 +43,8 @@ Current documents:
 - `docs/02-training-objectives.md` — possible training targets;
 - `docs/03-evaluation-and-falsification.md` — benchmarks, baselines, and conditions under which the idea should be rejected;
 - `docs/04-vera-origin-and-boundary.md` — where the idea came from and why SPM is separate from Vera identity/runtime architecture;
-- `docs/05-research-roadmap.md` — path from intuition to small falsifiable prototype.
+- `docs/05-research-roadmap.md` — path from intuition to small falsifiable prototype;
+- `docs/06-llm-failure-foundation.md` — research synthesis of LLM failure families that SPM must explain, benchmark, or falsify before architecture claims are justified.
 
 ## Core research question
 
