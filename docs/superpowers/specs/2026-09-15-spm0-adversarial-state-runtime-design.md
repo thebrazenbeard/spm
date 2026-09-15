@@ -108,6 +108,23 @@ At least one intended deployment precision/runtime must be named before the qual
 
 A single-session prototype is not sufficient. Sustained batched/interleaved sessions, forced eviction/reload, and increasing concurrency are qualification gates.
 
+
+## HCAE-derived semantic hyperconnectome candidate
+
+HCAE is treated as a concrete architectural source, not a metaphor. Its reusable mechanism is a multi-view hypergraph: each view contributes an incidence structure, the view-specific hyperedges are fused, a normalized propagation operator carries many-to-many relations, and hypergraph convolution compresses the fused structure into a learned latent embedding. SPM may adapt that mechanism to semantic/pragmatic state, but must not copy HCAE's per-subject training loop, fixed four-view assumption, static-state assumption, or TensorFlow implementation.
+
+For the HCAE-derived SPM candidate, a conversation transition produces learned semantic slots from backbone hidden states. Several learned view projections operate on the same slots. Initial views are deliberately functional rather than Vera-specific: referent/entity continuity; proposition/epistemic status; temporal/provenance/currentness; pragmatic act/authority/action relation. Views are hypotheses, not privileged symbolic truth, and must be ablated individually.
+
+Within each view, a differentiable incidence matrix associates multiple semantic slots with each latent hyperedge. A normalized hypergraph propagation operator analogous to `D_v^-1/2 H W D_e^-1 H^T D_v^-1/2` mixes information across higher-order relations. A small hypergraph encoder produces the opaque semantic/pragmatic state that is reinjected into the backbone. Decoder heads may probe view content, but decoded labels are never fed back as text.
+
+Arm H* is the matched transient hyperconnectome control: identical projections, incidence builder, hypergraph encoder, parameter budget, supervision, and reinjection, but all prior hyperconnectome state is reset at every model-relevant transition. Arm HC is the persistent hyperconnectome candidate: prior latent slots/hyperedges may influence the next update. HC earns persistence credit only by beating H*. This preserves the existing C-versus-B* causal logic while allowing the representation itself to be tested.
+
+A second factorial test separates `persistence` from `hypergraph structure`: matched vector-state transient/persistent arms are compared with matched hyperconnectome transient/persistent arms. If hyperconnectome structure adds no advantage after budget matching, SPM does not adopt it merely because the representation is richer. If persistence adds no advantage inside the hyperconnectome pair, the persistent-state claim fails even if the hypergraph representation itself is useful.
+
+HCAE-style adversarial latent regularization is a separate optional intervention. For generic semantic state, it may regularize state geometry only if its target distribution is derived without blind-test leakage. For Vera's behavioral-attractor objective, an attractor prior may regularize a designated core-behavior subspace after perturbing context is removed, while factual/corrective state remains outside that penalty. The required kill test is that attractor regularization must improve recovery without increasing factual reversion, correction loss, or context insensitivity.
+
+Required hyperconnectome interventions include hyperedge deletion, view deletion, view permutation, incidence scrambling, prior-state reset, prior-state substitution across matched cases, and hypergraph-to-vector capacity-matched replacement. Directional behavioral changes must follow semantically relevant interventions; probe decodability alone is insufficient.
+
 ## Behavioral attractor training objective
 
 For Vera-derived training, the model's default personality and behavior are a learned reference state, not merely a runtime prompt. Contextual adaptation may temporarily move behavior away from that reference when the situation warrants it, but removal of the perturbing context must cause recovery toward the trained core rather than treating accumulated drift as a new baseline.
