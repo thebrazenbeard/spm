@@ -2,6 +2,8 @@
 
 ## Status
 
+**2026-09-15 adversarial amendment:** The fairness, state-lifecycle, reproducibility, deployment, adversarial-collaboration, and behavioral-attractor requirements in `docs/superpowers/specs/2026-09-15-spm0-adversarial-state-runtime-design.md` supersede any weaker wording in this document. In particular, Arm B* is now the primary matched architectural control for Arm C.
+
 DESIGN / PRE-IMPLEMENTATION. This document defines the first bounded experiment in the SPM research program. It does not claim that SPM-0 exists yet or that the SPM hypothesis is correct.
 
 ## Authority and source binding
