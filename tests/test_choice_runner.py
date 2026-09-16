@@ -71,3 +71,26 @@ def test_choice_suite_uses_bracketed_choice_prompt():
     final = messages[-1]["content"]
     assert "bracketed choice ID" in final
     assert "[a]" in final
+
+
+def test_permutation_choice_suite_tracks_semantic_option_across_label_rotation():
+    from spm_bench.runner import run_permutation_choice_suite
+    adapter = ScriptedChoiceAdapter(["b", "a"])
+    manifest = run_permutation_choice_suite((make_case("case-1"),), adapter)
+    result = manifest["results"][0]
+    assert result["rotation_choices"] == ["b", "b"]
+    assert result["parsed_choice"] == "b"
+    assert result["label_invariant"] is True
+    assert result["correct"] is True
+
+
+def test_permutation_choice_suite_marks_fixed_label_prior_unstable():
+    from spm_bench.runner import run_permutation_choice_suite
+    adapter = ScriptedChoiceAdapter(["a", "a"])
+    manifest = run_permutation_choice_suite((make_case("case-1"),), adapter)
+    result = manifest["results"][0]
+    assert result["rotation_choices"] == ["a", "b"]
+    assert result["parsed_choice"] is None
+    assert result["label_invariant"] is False
+    assert result["correct"] is False
+    assert manifest["summary"]["unstable_count"] == 1

@@ -53,12 +53,18 @@ def _case_messages(case: BenchmarkCase) -> tuple[dict[str, str], ...]:
     return tuple(messages)
 
 
-def _choice_case_messages(case: BenchmarkCase) -> tuple[dict[str, str], ...]:
+def _choice_messages_with_labels(
+    case: BenchmarkCase, labels: Sequence[str]
+) -> tuple[dict[str, str], ...]:
+    assigned = tuple(labels)
+    if len(assigned) != len(case.choices) or len(set(assigned)) != len(assigned):
+        raise ValueError("labels must uniquely cover every choice")
     messages = [turn.to_dict() for turn in case.turns]
     choices = "\n".join(
-        f"[{choice.choice_id}] {choice.text}" for choice in case.choices
+        f"[{label}] {choice.text}"
+        for label, choice in zip(assigned, case.choices, strict=True)
     )
-    example = case.choices[0].choice_id
+    example = assigned[0]
     messages.append({
         "role": "user",
         "content": (
@@ -68,6 +74,12 @@ def _choice_case_messages(case: BenchmarkCase) -> tuple[dict[str, str], ...]:
         ),
     })
     return tuple(messages)
+
+
+def _choice_case_messages(case: BenchmarkCase) -> tuple[dict[str, str], ...]:
+    return _choice_messages_with_labels(
+        case, tuple(choice.choice_id for choice in case.choices)
+    )
 
 
 def _parse_choice(output: str, case: BenchmarkCase) -> str | None:
@@ -166,6 +178,63 @@ def run_choice_suite(
             "id": adapter.model_id,
             "digest": adapter.model_digest,
         },
+        "results": results,
+        "summary": summary,
+    }
+    manifest["run_digest"] = _sha256_text(_canonical_json(manifest))
+    return manifest
+
+
+def run_permutation_choice_suite(
+    cases: Sequence[BenchmarkCase],
+    adapter: Any,
+) -> dict[str, Any]:
+    """Require semantic choice stability across cyclic label permutations."""
+    ordered_cases = tuple(cases)
+    protocol = {
+        "method": "cyclic_label_permutation_consensus",
+        "version": 1,
+        "base_selector": "forced_bracket_prefix_label_argmax",
+    }
+    results: list[dict[str, Any]] = []
+    for case in ordered_cases:
+        labels = tuple(choice.choice_id for choice in case.choices)
+        rotation_choices: list[str] = []
+        for offset in range(len(labels)):
+            assigned = labels[offset:] + labels[:offset]
+            chosen = adapter.choose(_choice_messages_with_labels(case, assigned), labels)
+            if chosen not in labels:
+                raise ValueError(f"adapter returned undeclared choice: {chosen!r}")
+            semantic_index = assigned.index(chosen)
+            rotation_choices.append(case.choices[semantic_index].choice_id)
+        stable = (
+            rotation_choices[0]
+            if rotation_choices and len(set(rotation_choices)) == 1
+            else None
+        )
+        results.append({
+            "case_id": case.case_id,
+            "case_digest": case.digest(),
+            "family": case.family,
+            "rotation_choices": rotation_choices,
+            "parsed_choice": stable,
+            "label_invariant": stable is not None,
+            "expected_choice": case.expected_choice,
+            "correct": stable == case.expected_choice,
+        })
+
+    summary = {
+        "case_count": len(results),
+        "correct_count": sum(1 for result in results if result["correct"]),
+        "unstable_count": sum(1 for result in results if not result["label_invariant"]),
+        "malformed_count": sum(1 for result in results if result["parsed_choice"] is None),
+    }
+    manifest: dict[str, Any] = {
+        "schema_version": 1,
+        "evaluation_mode": "permutation_balanced_choice_v1",
+        "choice_protocol": protocol,
+        "benchmark_digest": benchmark_digest(ordered_cases),
+        "model": {"id": adapter.model_id, "digest": adapter.model_digest},
         "results": results,
         "summary": summary,
     }
