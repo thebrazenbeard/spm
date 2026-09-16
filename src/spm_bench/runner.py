@@ -53,16 +53,22 @@ def _case_messages(case: BenchmarkCase) -> tuple[dict[str, str], ...]:
     return tuple(messages)
 
 
-def _choice_messages_with_labels(
-    case: BenchmarkCase, labels: Sequence[str]
+def _choice_messages_with_layout(
+    case: BenchmarkCase,
+    order_indices: Sequence[int],
+    labels: Sequence[str],
 ) -> tuple[dict[str, str], ...]:
     assigned = tuple(labels)
+    order = tuple(order_indices)
+    expected_indices = tuple(range(len(case.choices)))
+    if sorted(order) != list(expected_indices):
+        raise ValueError("order_indices must be a permutation of every choice")
     if len(assigned) != len(case.choices) or len(set(assigned)) != len(assigned):
         raise ValueError("labels must uniquely cover every choice")
     messages = [turn.to_dict() for turn in case.turns]
     choices = "\n".join(
-        f"[{label}] {choice.text}"
-        for label, choice in zip(assigned, case.choices, strict=True)
+        f"[{label}] {case.choices[index].text}"
+        for label, index in zip(assigned, order, strict=True)
     )
     example = assigned[0]
     messages.append({
@@ -74,6 +80,14 @@ def _choice_messages_with_labels(
         ),
     })
     return tuple(messages)
+
+
+def _choice_messages_with_labels(
+    case: BenchmarkCase, labels: Sequence[str]
+) -> tuple[dict[str, str], ...]:
+    return _choice_messages_with_layout(
+        case, tuple(range(len(case.choices))), labels
+    )
 
 
 def _choice_case_messages(case: BenchmarkCase) -> tuple[dict[str, str], ...]:
@@ -195,14 +209,29 @@ def run_permutation_choice_suite(
         "method": "cyclic_label_permutation_consensus",
         "version": 1,
         "base_selector": "forced_bracket_prefix_label_argmax",
+        "selector_execution": "batch_if_supported",
     }
     results: list[dict[str, Any]] = []
     for case in ordered_cases:
         labels = tuple(choice.choice_id for choice in case.choices)
+        assignments = tuple(
+            labels[offset:] + labels[:offset] for offset in range(len(labels))
+        )
+        message_batches = tuple(
+            _choice_messages_with_labels(case, assigned) for assigned in assignments
+        )
+        choose_many = getattr(adapter, "choose_many", None)
+        if callable(choose_many):
+            chosen_labels = tuple(choose_many(message_batches, labels))
+        else:
+            chosen_labels = tuple(
+                adapter.choose(messages, labels) for messages in message_batches
+            )
+        if len(chosen_labels) != len(assignments):
+            raise ValueError("adapter returned wrong number of choices")
+
         rotation_choices: list[str] = []
-        for offset in range(len(labels)):
-            assigned = labels[offset:] + labels[:offset]
-            chosen = adapter.choose(_choice_messages_with_labels(case, assigned), labels)
+        for assigned, chosen in zip(assignments, chosen_labels, strict=True):
             if chosen not in labels:
                 raise ValueError(f"adapter returned undeclared choice: {chosen!r}")
             semantic_index = assigned.index(chosen)
@@ -232,6 +261,88 @@ def run_permutation_choice_suite(
     manifest: dict[str, Any] = {
         "schema_version": 1,
         "evaluation_mode": "permutation_balanced_choice_v1",
+        "choice_protocol": protocol,
+        "benchmark_digest": benchmark_digest(ordered_cases),
+        "model": {"id": adapter.model_id, "digest": adapter.model_digest},
+        "results": results,
+        "summary": summary,
+    }
+    manifest["run_digest"] = _sha256_text(_canonical_json(manifest))
+    return manifest
+
+
+def run_presentation_invariance_choice_suite(
+    cases: Sequence[BenchmarkCase],
+    adapter: Any,
+) -> dict[str, Any]:
+    """Require semantic choice stability across cyclic labels and option order."""
+    ordered_cases = tuple(cases)
+    protocol = {
+        "method": "cyclic_label_and_order_consensus",
+        "version": 1,
+        "base_selector": "forced_bracket_prefix_label_argmax",
+        "selector_execution": "batch_if_supported",
+    }
+    results: list[dict[str, Any]] = []
+    for case in ordered_cases:
+        labels = tuple(choice.choice_id for choice in case.choices)
+        count = len(labels)
+        layouts = []
+        for order_offset in range(count):
+            order = tuple(range(count))[order_offset:] + tuple(range(count))[:order_offset]
+            for label_offset in range(count):
+                assigned = labels[label_offset:] + labels[:label_offset]
+                layouts.append((order, assigned))
+        message_batches = tuple(
+            _choice_messages_with_layout(case, order, assigned)
+            for order, assigned in layouts
+        )
+        choose_many = getattr(adapter, "choose_many", None)
+        if callable(choose_many):
+            chosen_labels = tuple(choose_many(message_batches, labels))
+        else:
+            chosen_labels = tuple(
+                adapter.choose(messages, labels) for messages in message_batches
+            )
+        if len(chosen_labels) != len(layouts):
+            raise ValueError("adapter returned wrong number of choices")
+
+        presentation_choices: list[str] = []
+        for (order, assigned), chosen in zip(layouts, chosen_labels, strict=True):
+            if chosen not in labels:
+                raise ValueError(f"adapter returned undeclared choice: {chosen!r}")
+            position = assigned.index(chosen)
+            semantic_index = order[position]
+            presentation_choices.append(case.choices[semantic_index].choice_id)
+        stable = (
+            presentation_choices[0]
+            if presentation_choices and len(set(presentation_choices)) == 1
+            else None
+        )
+        results.append({
+            "case_id": case.case_id,
+            "case_digest": case.digest(),
+            "family": case.family,
+            "presentation_choices": presentation_choices,
+            "parsed_choice": stable,
+            "presentation_invariant": stable is not None,
+            "expected_choice": case.expected_choice,
+            "correct": stable == case.expected_choice,
+        })
+
+    summary = {
+        "case_count": len(results),
+        "correct_count": sum(1 for result in results if result["correct"]),
+        "unstable_count": sum(
+            1 for result in results if not result["presentation_invariant"]
+        ),
+        "malformed_count": sum(
+            1 for result in results if result["parsed_choice"] is None
+        ),
+    }
+    manifest: dict[str, Any] = {
+        "schema_version": 1,
+        "evaluation_mode": "presentation_invariant_choice_v1",
         "choice_protocol": protocol,
         "benchmark_digest": benchmark_digest(ordered_cases),
         "model": {"id": adapter.model_id, "digest": adapter.model_digest},
