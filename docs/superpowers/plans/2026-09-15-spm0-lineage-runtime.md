@@ -53,3 +53,15 @@ Tests first: substitution never mutates either source; freeze preserves prior pa
 ### Final gate
 
 Run focused tests, full suite, `compileall`, and `git diff --check`. Commit only on all-green. Runtime PASS remains separate from learned-model/behavioral qualification.
+
+### Task 6 — durable reference store
+
+Add a SQLite/WAL store implementing the same checkpoint/head/idempotency semantics as the in-memory store.
+
+Tests first: close/reopen preserves exact checkpoints and lineage heads; two independent store connections racing the same lineage produce one winner and one stale rejection; idempotency is lineage-scoped across reopen; malformed/orphaned durable rows fail closed on readback; snapshot/replay identity matches the in-memory reference.
+
+The SQLite store is a local durable reference implementation, not a production deployment claim. Its purpose is to prove that lifecycle semantics survive process boundaries and are not artifacts of one Python object or one `RLock`.
+
+### Additional runtime gate
+
+`RUNTIME_VERIFIED` requires both stores to pass the shared conformance semantics plus crash/reopen and cross-connection concurrency tests. In-memory green alone is insufficient.

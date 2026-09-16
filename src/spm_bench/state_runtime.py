@@ -30,16 +30,36 @@ def _canonical_json(value: Any) -> bytes:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 
-def canonical_prefix_digest(messages: Sequence[Mapping[str, str]]) -> str:
-    normalized: list[dict[str, str]] = []
+def _normalize_json_value(value: Any) -> Any:
+    if value is None or isinstance(value, (str, bool, int)):
+        return value
+    if isinstance(value, float):
+        if value != value or value in (float("inf"), float("-inf")):
+            raise ValueError("event values must be finite JSON-compatible values")
+        return value
+    if isinstance(value, Mapping):
+        normalized: dict[str, Any] = {}
+        for key, item in value.items():
+            if not isinstance(key, str):
+                raise ValueError("event mapping keys must be strings")
+            normalized[key] = _normalize_json_value(item)
+        return normalized
+    if isinstance(value, (list, tuple)):
+        return [_normalize_json_value(item) for item in value]
+    raise ValueError("event values must be JSON-compatible")
+
+
+def canonical_prefix_digest(messages: Sequence[Mapping[str, Any]]) -> str:
+    normalized: list[dict[str, Any]] = []
     for message in messages:
         if not isinstance(message, Mapping):
             raise ValueError("each message must be a mapping")
         role = message.get("role")
-        content = message.get("content")
-        if not isinstance(role, str) or not isinstance(content, str):
-            raise ValueError("each message requires string role and content")
-        normalized.append({"role": role, "content": content})
+        if not isinstance(role, str) or not role:
+            raise ValueError("each message requires a non-empty string role")
+        normalized_message = _normalize_json_value(message)
+        assert isinstance(normalized_message, dict)
+        normalized.append(normalized_message)
     return hashlib.sha256(_canonical_json(normalized)).hexdigest()
 
 
@@ -204,6 +224,17 @@ class InMemoryCheckpointStore:
 
     def snapshot(self) -> dict[str, Any]:
         with self._lock:
+            for lineage_id, digest in self._heads.items():
+                if digest not in self._checkpoints:
+                    raise ValueError(f"inconsistent store: lineage {lineage_id!r} head is missing")
+            for checkpoint in self._checkpoints.values():
+                if checkpoint.parent_digest is not None and checkpoint.parent_digest not in self._checkpoints:
+                    raise ValueError("inconsistent store: checkpoint parent is missing")
+            for (lineage_id, _key), (digest, expected_head) in self._idempotency.items():
+                if lineage_id not in self._heads or digest not in self._checkpoints:
+                    raise ValueError("inconsistent store: idempotency record references missing state")
+                if expected_head is not None and expected_head not in self._checkpoints:
+                    raise ValueError("inconsistent store: idempotency expected head is missing")
             checkpoints = []
             for checkpoint in sorted(self._checkpoints.values(), key=lambda item: item.digest):
                 checkpoints.append({
@@ -335,7 +366,7 @@ class LineageRuntime:
         lineage_id: str,
         *,
         expected_parent: str,
-        prefix: Sequence[Mapping[str, str]],
+        prefix: Sequence[Mapping[str, Any]],
         idempotency_key: str,
     ) -> CheckpointEnvelope:
         parent = self.store.get(expected_parent)
@@ -358,6 +389,14 @@ class LineageRuntime:
             expected_head=expected_parent, idempotency_key=idempotency_key,
         )
 
+    def fork(self, lineage_id: str, from_digest: str) -> CheckpointEnvelope:
+        checkpoint = self.store.get(from_digest)
+        if checkpoint is None:
+            raise ValueError("fork source checkpoint is unknown")
+        self._validate_subject(checkpoint)
+        self.store.fork_lineage(lineage_id, checkpoint.digest)
+        return checkpoint
+
     def resume(self, checkpoint_digest: str) -> CheckpointEnvelope:
         checkpoint = self.store.get(checkpoint_digest)
         if checkpoint is None:
@@ -375,12 +414,12 @@ class LineageRuntime:
         self,
         lineage_id: str,
         root_digest: str,
-        prefixes: Sequence[Sequence[Mapping[str, str]]],
+        prefixes: Sequence[Sequence[Mapping[str, Any]]],
         *,
         idempotency_prefix: str,
     ) -> CheckpointEnvelope:
         root = self.reset(root_digest)
-        self.store.fork_lineage(lineage_id, root.digest)
+        self.fork(lineage_id, root.digest)
         current = root
         for index, prefix in enumerate(prefixes, start=1):
             current = self.advance(

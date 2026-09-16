@@ -347,3 +347,70 @@ def test_store_rejects_child_subject_mismatch():
     )
     with pytest.raises(ValueError, match="subject"):
         store.commit(child, lineage_id="main", expected_head=root.digest, idempotency_key="subject")
+
+
+def test_prefix_digest_binds_nested_model_visible_event_fields():
+    base = ({
+        "role": "assistant",
+        "content": "checking",
+        "tool_calls": [{"name": "lookup", "arguments": {"query": "alpha", "limit": 3}}],
+        "attachments": [{"sha256": "a" * 64}],
+    },)
+    changed_tool = ({
+        "role": "assistant",
+        "content": "checking",
+        "tool_calls": [{"name": "lookup", "arguments": {"query": "beta", "limit": 3}}],
+        "attachments": [{"sha256": "a" * 64}],
+    },)
+    changed_attachment = ({
+        "role": "assistant",
+        "content": "checking",
+        "tool_calls": [{"name": "lookup", "arguments": {"query": "alpha", "limit": 3}}],
+        "attachments": [{"sha256": "b" * 64}],
+    },)
+
+    assert canonical_prefix_digest(base) != canonical_prefix_digest(changed_tool)
+    assert canonical_prefix_digest(base) != canonical_prefix_digest(changed_attachment)
+
+
+def test_prefix_digest_is_stable_under_mapping_key_order():
+    left = ({"role": "user", "content": "x", "metadata": {"b": 2, "a": 1}},)
+    right = ({"metadata": {"a": 1, "b": 2}, "content": "x", "role": "user"},)
+    assert canonical_prefix_digest(left) == canonical_prefix_digest(right)
+
+
+def test_prefix_digest_rejects_non_json_event_values():
+    with pytest.raises(ValueError, match="JSON-compatible"):
+        canonical_prefix_digest(({"role": "user", "content": "x", "bad": {1, 2}},))
+
+
+def test_runtime_fork_validates_subject_and_creates_new_lineage():
+    store = InMemoryCheckpointStore()
+    runtime = LineageRuntime(store, model_digest=D3, schema_digest="4" * 64, updater=synthetic_updater)
+    root = runtime.root("main", initial_state=b"seed", idempotency_key="root")
+
+    forked = runtime.fork("branch", root.digest)
+    assert forked == root
+    assert store.head("branch") == root.digest
+
+    other = CheckpointEnvelope.create(
+        model_digest="9" * 64, schema_digest="4" * 64,
+        prefix_digest=canonical_prefix_digest(()), parent_digest=None,
+        sequence=0, state_payload=b"other",
+    )
+    store.commit(other, lineage_id="other", expected_head=None, idempotency_key="root")
+    with pytest.raises(ValueError, match="model digest"):
+        runtime.fork("bad", other.digest)
+
+
+def test_snapshot_refuses_to_emit_dangling_head_after_fault_eviction():
+    store = InMemoryCheckpointStore()
+    runtime = LineageRuntime(store, model_digest=D3, schema_digest="4" * 64, updater=synthetic_updater)
+    root = runtime.root("main", initial_state=b"seed", idempotency_key="root")
+    child = runtime.advance(
+        "main", expected_parent=root.digest,
+        prefix=({"role": "user", "content": "x"},), idempotency_key="x",
+    )
+    store.evict(child.digest)
+    with pytest.raises(ValueError, match="inconsistent"):
+        store.snapshot()
