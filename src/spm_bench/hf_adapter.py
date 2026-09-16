@@ -114,3 +114,38 @@ class LocalHFAdapter:
         generated = model.generate(**inputs, **config)
         new_tokens = generated[0][input_length:]
         return tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
+
+    def choose(
+        self,
+        messages: Sequence[Mapping[str, str]],
+        choice_ids: Sequence[str],
+    ) -> str:
+        tokenizer, model = self._load()
+        choices = tuple(choice_ids)
+        if not choices or any(not isinstance(choice, str) or not choice for choice in choices):
+            raise ValueError("choice_ids must contain non-empty strings")
+
+        token_ids: list[int] = []
+        for choice in choices:
+            encoded = tokenizer.encode(choice, add_special_tokens=False)
+            if len(encoded) != 1:
+                raise ValueError("each choice ID must encode to a single tokenizer token")
+            token_ids.append(encoded[0])
+
+        prompt = tokenizer.apply_chat_template(
+            list(messages), tokenize=False, add_generation_prompt=True
+        ) + "["
+        inputs = tokenizer(prompt, return_tensors="pt")
+        device = getattr(model, "device", None)
+        if device is not None:
+            inputs = {
+                key: value.to(device) if hasattr(value, "to") else value
+                for key, value in inputs.items()
+            }
+
+        import torch
+        with torch.no_grad():
+            logits = model(**inputs).logits[0, -1]
+        scores = [float(logits[token_id].item()) for token_id in token_ids]
+        winner = max(range(len(choices)), key=scores.__getitem__)
+        return choices[winner]

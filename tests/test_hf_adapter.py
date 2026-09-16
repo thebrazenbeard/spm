@@ -119,3 +119,118 @@ def test_generate_uses_deterministic_defaults_and_decodes_only_new_tokens(tmp_pa
     assert generation["max_new_tokens"] == 4
     assert "temperature" not in generation
     assert generation["pad_token_id"] == 0
+
+
+def test_choose_constrains_decision_to_declared_single_token_ids(tmp_path, monkeypatch):
+    import torch
+
+    model_path = tmp_path / "model"
+    model_path.mkdir()
+    (model_path / "config.json").write_text("{}", encoding="utf-8")
+
+    class FakeTokenizer:
+        def apply_chat_template(self, messages, tokenize, add_generation_prompt):
+            return "PROMPT"
+        def __call__(self, prompt, return_tensors):
+            return {"input_ids": torch.tensor([[1, 2]]), "attention_mask": torch.tensor([[1, 1]])}
+        def encode(self, value, add_special_tokens=False):
+            return {"a": [10], "b": [20], "c": [30]}[value]
+
+    class FakeTokenizerClass:
+        @classmethod
+        def from_pretrained(cls, path, **kwargs):
+            return FakeTokenizer()
+
+    class FakeOutputs:
+        def __init__(self):
+            self.logits = torch.zeros((1, 2, 64))
+            self.logits[0, -1, 10] = 1.0
+            self.logits[0, -1, 20] = 5.0
+            self.logits[0, -1, 30] = 2.0
+
+    class FakeModel:
+        device = "cpu"
+        def eval(self):
+            return self
+        def __call__(self, **kwargs):
+            return FakeOutputs()
+
+    class FakeModelClass:
+        @classmethod
+        def from_pretrained(cls, path, **kwargs):
+            return FakeModel()
+
+    monkeypatch.setattr(hf_adapter, "_load_hf_classes", lambda: (FakeTokenizerClass, FakeModelClass))
+    adapter = LocalHFAdapter(model_path, "model-x", "rev-1", {})
+    chosen = adapter.choose(({"role": "user", "content": "x"},), ("a", "b", "c"))
+    assert chosen == "b"
+
+
+def test_choose_rejects_multitoken_choice_ids(tmp_path, monkeypatch):
+    model_path = tmp_path / "model"
+    model_path.mkdir()
+    (model_path / "config.json").write_text("{}", encoding="utf-8")
+
+    class FakeTokenizer:
+        def apply_chat_template(self, messages, tokenize, add_generation_prompt):
+            return "PROMPT"
+        def __call__(self, prompt, return_tensors):
+            import torch
+            return {"input_ids": torch.tensor([[1]]), "attention_mask": torch.tensor([[1]])}
+        def encode(self, value, add_special_tokens=False):
+            return [1, 2]
+
+    class FakeTokenizerClass:
+        @classmethod
+        def from_pretrained(cls, path, **kwargs):
+            return FakeTokenizer()
+
+    class FakeModelClass:
+        @classmethod
+        def from_pretrained(cls, path, **kwargs):
+            class FakeModel:
+                device = "cpu"
+                def eval(self): return self
+            return FakeModel()
+
+    monkeypatch.setattr(hf_adapter, "_load_hf_classes", lambda: (FakeTokenizerClass, FakeModelClass))
+    adapter = LocalHFAdapter(model_path, "model-x", "rev-1", {})
+    with pytest.raises(ValueError, match="single tokenizer token"):
+        adapter.choose(({"role": "user", "content": "x"},), ("aa",))
+
+
+def test_choose_scores_labels_after_forced_shared_bracket_prefix(tmp_path, monkeypatch):
+    import torch
+    model_path = tmp_path / "model"
+    model_path.mkdir()
+    (model_path / "config.json").write_text("{}", encoding="utf-8")
+    observed = {}
+
+    class FakeTokenizer:
+        def apply_chat_template(self, messages, tokenize, add_generation_prompt): return "PROMPT"
+        def __call__(self, prompt, return_tensors):
+            observed["prompt"] = prompt
+            return {"input_ids": torch.tensor([[1, 2]]), "attention_mask": torch.tensor([[1, 1]])}
+        def encode(self, value, add_special_tokens=False): return {"a": [10], "b": [20]}[value]
+
+    class FakeTokenizerClass:
+        @classmethod
+        def from_pretrained(cls, path, **kwargs): return FakeTokenizer()
+
+    class FakeOutputs:
+        def __init__(self):
+            self.logits = torch.zeros((1, 2, 32)); self.logits[0, -1, 20] = 3
+
+    class FakeModel:
+        device = "cpu"
+        def eval(self): return self
+        def __call__(self, **kwargs): return FakeOutputs()
+
+    class FakeModelClass:
+        @classmethod
+        def from_pretrained(cls, path, **kwargs): return FakeModel()
+
+    monkeypatch.setattr(hf_adapter, "_load_hf_classes", lambda: (FakeTokenizerClass, FakeModelClass))
+    adapter = LocalHFAdapter(model_path, "model-x", "rev-1", {})
+    assert adapter.choose(({"role": "user", "content": "x"},), ("a", "b")) == "b"
+    assert observed["prompt"] == "PROMPT["
