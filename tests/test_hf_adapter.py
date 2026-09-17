@@ -284,3 +284,45 @@ def test_choose_many_batches_prompts_without_changing_choice_semantics(tmp_path,
     assert observed["calls"] == 1
     assert observed["input_ids"] == [[1, 2, 0], [1, 2, 3]]
     assert observed["attention_mask"] == [[1, 1, 0], [1, 1, 1]]
+
+
+def test_score_many_returns_declared_choice_probabilities_per_prompt(tmp_path, monkeypatch):
+    import torch
+    model_path = tmp_path / "model"
+    model_path.mkdir()
+    (model_path / "config.json").write_text("{}", encoding="utf-8")
+
+    class FakeTokenizer:
+        pad_token_id = 0
+        eos_token_id = 2
+        def apply_chat_template(self, messages, tokenize, add_generation_prompt): return messages[0]["content"]
+        def __call__(self, prompt, return_tensors):
+            ids = [1, 2] if prompt.startswith("short") else [1, 2, 3]
+            return {"input_ids": torch.tensor([ids]), "attention_mask": torch.ones((1, len(ids)), dtype=torch.long)}
+        def encode(self, value, add_special_tokens=False): return {"a": [10], "b": [20]}[value]
+    class FakeTokenizerClass:
+        @classmethod
+        def from_pretrained(cls, path, **kwargs): return FakeTokenizer()
+
+    class FakeOutputs:
+        def __init__(self):
+            self.logits = torch.zeros((2, 3, 32))
+            self.logits[0, 1, 10] = 1.0; self.logits[0, 1, 20] = 3.0
+            self.logits[1, 2, 10] = 4.0; self.logits[1, 2, 20] = 2.0
+
+    class FakeModel:
+        device = "cpu"
+        def eval(self): return self
+        def __call__(self, **kwargs): return FakeOutputs()
+    class FakeModelClass:
+        @classmethod
+        def from_pretrained(cls, path, **kwargs): return FakeModel()
+
+    monkeypatch.setattr(hf_adapter, "_load_hf_classes", lambda: (FakeTokenizerClass, FakeModelClass))
+    adapter = LocalHFAdapter(model_path, "model-x", "rev-1", {})
+    batches = (({"role": "user", "content": "short"},), ({"role": "user", "content": "longer"},))
+    scores = adapter.score_many(batches, ("a", "b"))
+    assert set(scores[0]) == {"a", "b"}
+    assert scores[0]["b"] > scores[0]["a"]
+    assert scores[1]["a"] > scores[1]["b"]
+    assert all(abs(sum(row.values()) - 1.0) < 1e-6 for row in scores)

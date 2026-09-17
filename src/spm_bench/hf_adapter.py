@@ -202,3 +202,70 @@ class LocalHFAdapter:
             scores = [float(logits[row, length - 1, token_id].item()) for token_id in token_ids]
             winners.append(choices[max(range(len(choices)), key=scores.__getitem__)])
         return tuple(winners)
+
+    def score_many(
+        self,
+        message_batches: Sequence[Sequence[Mapping[str, str]]],
+        choice_ids: Sequence[str],
+    ) -> tuple[dict[str, float], ...]:
+        tokenizer, model = self._load()
+        choices = tuple(choice_ids)
+        if not choices or any(not isinstance(choice, str) or not choice for choice in choices):
+            raise ValueError("choice_ids must contain non-empty strings")
+
+        token_ids: list[int] = []
+        for choice in choices:
+            encoded = tokenizer.encode(choice, add_special_tokens=False)
+            if len(encoded) != 1:
+                raise ValueError("each choice ID must encode to a single tokenizer token")
+            token_ids.append(encoded[0])
+
+        import torch
+        encoded_prompts = []
+        lengths: list[int] = []
+        for messages in message_batches:
+            prompt = tokenizer.apply_chat_template(
+                list(messages), tokenize=False, add_generation_prompt=True
+            ) + "["
+            encoded = tokenizer(prompt, return_tensors="pt")
+            encoded_prompts.append(encoded)
+            lengths.append(int(encoded["input_ids"].shape[-1]))
+        if not encoded_prompts:
+            return ()
+        max_length = max(lengths)
+        pad_token_id = getattr(tokenizer, "pad_token_id", None)
+        if pad_token_id is None:
+            pad_token_id = getattr(tokenizer, "eos_token_id", 0)
+        input_rows = []
+        mask_rows = []
+        for encoded, length in zip(encoded_prompts, lengths, strict=True):
+            padding = max_length - length
+            input_rows.append(torch.cat((
+                encoded["input_ids"][0],
+                torch.full((padding,), pad_token_id, dtype=encoded["input_ids"].dtype),
+            )))
+            mask_rows.append(torch.cat((
+                encoded["attention_mask"][0],
+                torch.zeros((padding,), dtype=encoded["attention_mask"].dtype),
+            )))
+        inputs = {
+            "input_ids": torch.stack(input_rows),
+            "attention_mask": torch.stack(mask_rows),
+        }
+        device = getattr(model, "device", None)
+        if device is not None:
+            inputs = {key: value.to(device) for key, value in inputs.items()}
+
+        with torch.no_grad():
+            logits = model(**inputs).logits
+        rows: list[dict[str, float]] = []
+        for row, length in enumerate(lengths):
+            selected = torch.stack([
+                logits[row, length - 1, token_id] for token_id in token_ids
+            ])
+            probabilities = torch.softmax(selected.float(), dim=0)
+            rows.append({
+                choice: float(probabilities[index].item())
+                for index, choice in enumerate(choices)
+            })
+        return tuple(rows)

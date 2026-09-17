@@ -161,3 +161,47 @@ def test_presentation_invariance_suite_rejects_fixed_first_option_bias():
     assert result["presentation_invariant"] is False
     assert result["correct"] is False
     assert manifest["summary"]["unstable_count"] == 1
+
+
+def test_balanced_score_suite_cancels_fixed_first_position_bias():
+    import re
+    from spm_bench.runner import run_balanced_score_choice_suite
+
+    class FirstPositionScoreAdapter:
+        model_id = "position-bias"
+        model_digest = "b" * 64
+        def score_many(self, message_batches, choice_ids):
+            rows = []
+            for messages in message_batches:
+                first = re.search(r"Choices:\n\[([^]]+)\]", messages[-1]["content"]).group(1)
+                rows.append({choice: (0.9 if choice == first else 0.1) for choice in choice_ids})
+            return tuple(rows)
+
+    result = run_balanced_score_choice_suite((make_case("case-1"),), FirstPositionScoreAdapter())["results"][0]
+    assert result["parsed_choice"] is None
+    assert result["tie"] is True
+    assert result["correct"] is False
+
+
+def test_balanced_score_suite_recovers_semantic_signal_across_presentations():
+    import re
+    from spm_bench.runner import run_balanced_score_choice_suite
+
+    class SemanticScoreAdapter:
+        model_id = "semantic-score"
+        model_digest = "c" * 64
+        def score_many(self, message_batches, choice_ids):
+            rows = []
+            for messages in message_batches:
+                text = messages[-1]["content"]
+                right = re.search(r"\[([^]]+)\] right", text).group(1)
+                rows.append({choice: (0.75 if choice == right else 0.25) for choice in choice_ids})
+            return tuple(rows)
+
+    manifest = run_balanced_score_choice_suite((make_case("case-1"),), SemanticScoreAdapter())
+    result = manifest["results"][0]
+    assert result["parsed_choice"] == "b"
+    assert result["tie"] is False
+    assert result["correct"] is True
+    assert result["semantic_scores"]["b"] > result["semantic_scores"]["a"]
+    assert manifest["evaluation_mode"] == "balanced_semantic_score_v1"

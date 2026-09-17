@@ -351,3 +351,87 @@ def run_presentation_invariance_choice_suite(
     }
     manifest["run_digest"] = _sha256_text(_canonical_json(manifest))
     return manifest
+
+
+def run_balanced_score_choice_suite(
+    cases: Sequence[BenchmarkCase],
+    adapter: Any,
+) -> dict[str, Any]:
+    """Average semantic choice probability across balanced labels and positions."""
+    ordered_cases = tuple(cases)
+    protocol = {
+        "method": "balanced_label_position_probability_mean",
+        "version": 1,
+        "base_selector": "forced_bracket_prefix_declared_label_softmax",
+        "layout": "crossed_cyclic_labels_and_order",
+    }
+    results: list[dict[str, Any]] = []
+    for case in ordered_cases:
+        labels = tuple(choice.choice_id for choice in case.choices)
+        count = len(labels)
+        layouts = []
+        for order_offset in range(count):
+            order = tuple(range(count))[order_offset:] + tuple(range(count))[:order_offset]
+            for label_offset in range(count):
+                assigned = labels[label_offset:] + labels[:label_offset]
+                layouts.append((order, assigned))
+        message_batches = tuple(
+            _choice_messages_with_layout(case, order, assigned)
+            for order, assigned in layouts
+        )
+        score_many = getattr(adapter, "score_many", None)
+        if not callable(score_many):
+            raise TypeError("adapter must provide score_many for balanced semantic scoring")
+        score_rows = tuple(score_many(message_batches, labels))
+        if len(score_rows) != len(layouts):
+            raise ValueError("adapter returned wrong number of score rows")
+        totals = {choice.choice_id: 0.0 for choice in case.choices}
+        for (order, assigned), row in zip(layouts, score_rows, strict=True):
+            if set(row) != set(labels):
+                raise ValueError("adapter score row must cover exactly the declared choices")
+            for label in labels:
+                probability = float(row[label])
+                if probability < 0.0 or probability > 1.0:
+                    raise ValueError("adapter probabilities must be within [0, 1]")
+                position = assigned.index(label)
+                semantic_index = order[position]
+                semantic_id = case.choices[semantic_index].choice_id
+                totals[semantic_id] += probability
+
+        semantic_scores = {
+            choice_id: total / len(layouts)
+            for choice_id, total in totals.items()
+        }
+        best = max(semantic_scores.values())
+        winners = [
+            choice_id for choice_id, score in semantic_scores.items()
+            if abs(score - best) <= 1e-12
+        ]
+        tie = len(winners) != 1
+        parsed_choice = None if tie else winners[0]
+        results.append({
+            "case_id": case.case_id,
+            "case_digest": case.digest(),
+            "family": case.family,
+            "semantic_scores": semantic_scores,
+            "parsed_choice": parsed_choice,
+            "tie": tie,
+            "expected_choice": case.expected_choice,
+            "correct": parsed_choice == case.expected_choice,
+        })
+    summary = {
+        "case_count": len(results),
+        "correct_count": sum(1 for result in results if result["correct"]),
+        "tie_count": sum(1 for result in results if result["tie"]),
+    }
+    manifest: dict[str, Any] = {
+        "schema_version": 1,
+        "evaluation_mode": "balanced_semantic_score_v1",
+        "choice_protocol": protocol,
+        "benchmark_digest": benchmark_digest(ordered_cases),
+        "model": {"id": adapter.model_id, "digest": adapter.model_digest},
+        "results": results,
+        "summary": summary,
+    }
+    manifest["run_digest"] = _sha256_text(_canonical_json(manifest))
+    return manifest
