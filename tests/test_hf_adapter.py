@@ -326,3 +326,47 @@ def test_score_many_returns_declared_choice_probabilities_per_prompt(tmp_path, m
     assert scores[0]["b"] > scores[0]["a"]
     assert scores[1]["a"] > scores[1]["b"]
     assert all(abs(sum(row.values()) - 1.0) < 1e-6 for row in scores)
+
+
+def test_score_many_uses_last_logit_optimization_for_equal_length_prompts(tmp_path, monkeypatch):
+    import torch
+    model_path = tmp_path / "model"
+    model_path.mkdir()
+    (model_path / "config.json").write_text("{}", encoding="utf-8")
+    observed = {}
+
+    class FakeTokenizer:
+        pad_token_id = 0
+        eos_token_id = 2
+        def apply_chat_template(self, messages, tokenize, add_generation_prompt): return messages[0]["content"]
+        def __call__(self, prompt, return_tensors):
+            return {"input_ids": torch.tensor([[1, 2]]), "attention_mask": torch.tensor([[1, 1]])}
+        def encode(self, value, add_special_tokens=False): return {"a": [10], "b": [20]}[value]
+    class FakeTokenizerClass:
+        @classmethod
+        def from_pretrained(cls, path, **kwargs): return FakeTokenizer()
+
+    class FakeOutputs:
+        def __init__(self):
+            self.logits = torch.zeros((2, 1, 32))
+            self.logits[0, 0, 20] = 3.0
+            self.logits[1, 0, 10] = 4.0
+
+    class FakeModel:
+        device = "cpu"
+        def eval(self): return self
+        def __call__(self, **kwargs):
+            observed["logits_to_keep"] = kwargs.get("logits_to_keep")
+            return FakeOutputs()
+
+    class FakeModelClass:
+        @classmethod
+        def from_pretrained(cls, path, **kwargs): return FakeModel()
+
+    monkeypatch.setattr(hf_adapter, "_load_hf_classes", lambda: (FakeTokenizerClass, FakeModelClass))
+    adapter = LocalHFAdapter(model_path, "model-x", "rev-1", {})
+    batches = (({"role": "user", "content": "one"},), ({"role": "user", "content": "two"},))
+    scores = adapter.score_many(batches, ("a", "b"))
+    assert observed["logits_to_keep"] == 1
+    assert scores[0]["b"] > scores[0]["a"]
+    assert scores[1]["a"] > scores[1]["b"]

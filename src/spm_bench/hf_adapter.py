@@ -256,12 +256,17 @@ class LocalHFAdapter:
         if device is not None:
             inputs = {key: value.to(device) for key, value in inputs.items()}
 
+        equal_length = len(set(lengths)) == 1
         with torch.no_grad():
-            logits = model(**inputs).logits
+            if equal_length:
+                logits = model(**inputs, logits_to_keep=1).logits
+            else:
+                logits = model(**inputs).logits
         rows: list[dict[str, float]] = []
         for row, length in enumerate(lengths):
+            logit_position = -1 if equal_length else length - 1
             selected = torch.stack([
-                logits[row, length - 1, token_id] for token_id in token_ids
+                logits[row, logit_position, token_id] for token_id in token_ids
             ])
             probabilities = torch.softmax(selected.float(), dim=0)
             rows.append({
