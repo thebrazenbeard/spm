@@ -164,3 +164,40 @@ def test_exact_baseline_readiness_fails_on_evaluator_or_model_drift():
     assert status["status"] == "NOT_READY"
     assert any("evaluator commit mismatch" in blocker for blocker in status["blockers"])
     assert any("model digest mismatch" in blocker for blocker in status["blockers"])
+
+
+def test_exact_baseline_readiness_can_require_runtime_precision():
+    from spm_bench.compare import baseline_readiness_exact
+
+    subjects = {"1" * 64: "a" * 64, "2" * 64: "b" * 64, "3" * 64: "c" * 64}
+    evidences = []
+    for subject, model_digest in subjects.items():
+        item = evidence(subject)
+        item["evaluator_commit"] = "commit-1"
+        item["run"]["model"] = {"digest": model_digest}
+        item["run"]["execution"] = {"score_method": "selected_output_projection_v1"}
+        item["runtime"] = {"model_parameter_dtype": "torch.bfloat16"}
+        evidences.append(item)
+
+    ready = baseline_readiness_exact(
+        suite_frozen=True,
+        benchmark_digest=BENCHMARK,
+        subject_model_digests=subjects,
+        inherited_subject_digest="3" * 64,
+        evaluator_commit="commit-1",
+        score_method="selected_output_projection_v1",
+        evidences=evidences,
+        runtime_requirements={"model_parameter_dtype": "torch.bfloat16"},
+    )
+    assert ready["status"] == "READY"
+
+    evidences[0]["runtime"]["model_parameter_dtype"] = "torch.float16"
+    not_ready = baseline_readiness_exact(
+        suite_frozen=True, benchmark_digest=BENCHMARK,
+        subject_model_digests=subjects, inherited_subject_digest="3" * 64,
+        evaluator_commit="commit-1", score_method="selected_output_projection_v1",
+        evidences=evidences,
+        runtime_requirements={"model_parameter_dtype": "torch.bfloat16"},
+    )
+    assert not_ready["status"] == "NOT_READY"
+    assert any("runtime model_parameter_dtype mismatch" in item for item in not_ready["blockers"])

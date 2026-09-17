@@ -121,6 +121,7 @@ def baseline_readiness_exact(
     evaluator_commit: str,
     score_method: str,
     evidences: Sequence[Mapping[str, Any]],
+    runtime_requirements: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Fail closed unless subject, model, evaluator, and scoring method all bind exactly."""
     subjects = tuple(subject_model_digests)
@@ -159,6 +160,14 @@ def baseline_readiness_exact(
         run_digest = run.get("run_digest")
         if not isinstance(run_digest, str) or len(run_digest) != 64:
             blockers.append(f"run digest is not bound for subject {subject}")
+        if runtime_requirements:
+            runtime = evidence.get("runtime")
+            if not isinstance(runtime, Mapping):
+                blockers.append(f"runtime metadata is not bound for subject {subject}")
+            else:
+                for key, expected in runtime_requirements.items():
+                    if runtime.get(key) != expected:
+                        blockers.append(f"runtime {key} mismatch for subject {subject}")
 
     return {
         "status": "READY" if not blockers else "NOT_READY",
