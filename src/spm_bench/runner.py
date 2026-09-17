@@ -353,11 +353,63 @@ def run_presentation_invariance_choice_suite(
     return manifest
 
 
+def _balanced_layouts(case: BenchmarkCase):
+    labels = tuple(choice.choice_id for choice in case.choices)
+    count = len(labels)
+    layouts = []
+    for order_offset in range(count):
+        order = tuple(range(count))[order_offset:] + tuple(range(count))[:order_offset]
+        for label_offset in range(count):
+            assigned = labels[label_offset:] + labels[:label_offset]
+            layouts.append((order, assigned))
+    messages = tuple(
+        _choice_messages_with_layout(case, order, assigned)
+        for order, assigned in layouts
+    )
+    return labels, tuple(layouts), messages
+
+
+def _balanced_score_result(case, labels, layouts, score_rows):
+    if len(score_rows) != len(layouts):
+        raise ValueError("adapter returned wrong number of score rows")
+    totals = {choice.choice_id: 0.0 for choice in case.choices}
+    for (order, assigned), row in zip(layouts, score_rows, strict=True):
+        if set(row) != set(labels):
+            raise ValueError("adapter score row must cover exactly the declared choices")
+        for label in labels:
+            probability = float(row[label])
+            if probability < 0.0 or probability > 1.0:
+                raise ValueError("adapter probabilities must be within [0, 1]")
+            position = assigned.index(label)
+            semantic_index = order[position]
+            semantic_id = case.choices[semantic_index].choice_id
+            totals[semantic_id] += probability
+    semantic_scores = {key: value / len(layouts) for key, value in totals.items()}
+    best = max(semantic_scores.values())
+    winners = [key for key, value in semantic_scores.items() if abs(value - best) <= 1e-12]
+    tie = len(winners) != 1
+    parsed_choice = None if tie else winners[0]
+    return {
+        "case_id": case.case_id,
+        "case_digest": case.digest(),
+        "family": case.family,
+        "semantic_scores": semantic_scores,
+        "parsed_choice": parsed_choice,
+        "tie": tie,
+        "expected_choice": case.expected_choice,
+        "correct": parsed_choice == case.expected_choice,
+    }
+
+
 def run_balanced_score_choice_suite(
     cases: Sequence[BenchmarkCase],
     adapter: Any,
+    *,
+    case_batch_size: int = 1,
 ) -> dict[str, Any]:
     """Average semantic choice probability across balanced labels and positions."""
+    if isinstance(case_batch_size, bool) or not isinstance(case_batch_size, int) or case_batch_size <= 0:
+        raise ValueError("case_batch_size must be a positive integer")
     ordered_cases = tuple(cases)
     protocol = {
         "method": "balanced_label_position_probability_mean",
@@ -365,60 +417,39 @@ def run_balanced_score_choice_suite(
         "base_selector": "forced_bracket_prefix_declared_label_softmax",
         "layout": "crossed_cyclic_labels_and_order",
     }
-    results: list[dict[str, Any]] = []
-    for case in ordered_cases:
-        labels = tuple(choice.choice_id for choice in case.choices)
-        count = len(labels)
-        layouts = []
-        for order_offset in range(count):
-            order = tuple(range(count))[order_offset:] + tuple(range(count))[:order_offset]
-            for label_offset in range(count):
-                assigned = labels[label_offset:] + labels[:label_offset]
-                layouts.append((order, assigned))
-        message_batches = tuple(
-            _choice_messages_with_layout(case, order, assigned)
-            for order, assigned in layouts
-        )
-        score_many = getattr(adapter, "score_many", None)
-        if not callable(score_many):
-            raise TypeError("adapter must provide score_many for balanced semantic scoring")
-        score_rows = tuple(score_many(message_batches, labels))
-        if len(score_rows) != len(layouts):
-            raise ValueError("adapter returned wrong number of score rows")
-        totals = {choice.choice_id: 0.0 for choice in case.choices}
-        for (order, assigned), row in zip(layouts, score_rows, strict=True):
-            if set(row) != set(labels):
-                raise ValueError("adapter score row must cover exactly the declared choices")
-            for label in labels:
-                probability = float(row[label])
-                if probability < 0.0 or probability > 1.0:
-                    raise ValueError("adapter probabilities must be within [0, 1]")
-                position = assigned.index(label)
-                semantic_index = order[position]
-                semantic_id = case.choices[semantic_index].choice_id
-                totals[semantic_id] += probability
+    score_many = getattr(adapter, "score_many", None)
+    if not callable(score_many):
+        raise TypeError("adapter must provide score_many for balanced semantic scoring")
 
-        semantic_scores = {
-            choice_id: total / len(layouts)
-            for choice_id, total in totals.items()
-        }
-        best = max(semantic_scores.values())
-        winners = [
-            choice_id for choice_id, score in semantic_scores.items()
-            if abs(score - best) <= 1e-12
-        ]
-        tie = len(winners) != 1
-        parsed_choice = None if tie else winners[0]
-        results.append({
-            "case_id": case.case_id,
-            "case_digest": case.digest(),
-            "family": case.family,
-            "semantic_scores": semantic_scores,
-            "parsed_choice": parsed_choice,
-            "tie": tie,
-            "expected_choice": case.expected_choice,
-            "correct": parsed_choice == case.expected_choice,
-        })
+    results_by_index = [None] * len(ordered_cases)
+    for chunk_start in range(0, len(ordered_cases), case_batch_size):
+        chunk_indices = list(range(chunk_start, min(chunk_start + case_batch_size, len(ordered_cases))))
+        groups = {}
+        for index in chunk_indices:
+            labels = tuple(choice.choice_id for choice in ordered_cases[index].choices)
+            groups.setdefault(labels, []).append(index)
+        for labels, indices in groups.items():
+            message_batches = []
+            metadata = []
+            for index in indices:
+                case = ordered_cases[index]
+                observed_labels, layouts, messages = _balanced_layouts(case)
+                if observed_labels != labels:
+                    raise RuntimeError("choice-label grouping drifted")
+                row_start = len(message_batches)
+                message_batches.extend(messages)
+                metadata.append((index, case, layouts, row_start, len(message_batches)))
+            score_rows = tuple(score_many(tuple(message_batches), labels))
+            if len(score_rows) != len(message_batches):
+                raise ValueError("adapter returned wrong number of score rows")
+            for index, case, layouts, row_start, row_end in metadata:
+                results_by_index[index] = _balanced_score_result(
+                    case, labels, layouts, score_rows[row_start:row_end]
+                )
+
+    results = [result for result in results_by_index if result is not None]
+    if len(results) != len(ordered_cases):
+        raise RuntimeError("balanced scoring did not produce every case result")
     summary = {
         "case_count": len(results),
         "correct_count": sum(1 for result in results if result["correct"]),
@@ -428,6 +459,7 @@ def run_balanced_score_choice_suite(
         "schema_version": 1,
         "evaluation_mode": "balanced_semantic_score_v1",
         "choice_protocol": protocol,
+        "execution": {"case_batch_size": case_batch_size},
         "benchmark_digest": benchmark_digest(ordered_cases),
         "model": {"id": adapter.model_id, "digest": adapter.model_digest},
         "results": results,

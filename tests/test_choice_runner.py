@@ -205,3 +205,32 @@ def test_balanced_score_suite_recovers_semantic_signal_across_presentations():
     assert result["correct"] is True
     assert result["semantic_scores"]["b"] > result["semantic_scores"]["a"]
     assert manifest["evaluation_mode"] == "balanced_semantic_score_v1"
+
+
+def test_balanced_score_suite_case_batching_preserves_results_and_reduces_calls():
+    import re
+    from spm_bench.runner import run_balanced_score_choice_suite
+
+    class CountingSemanticScoreAdapter:
+        model_id = "batch-score"
+        model_digest = "d" * 64
+        def __init__(self): self.calls = 0
+        def score_many(self, message_batches, choice_ids):
+            self.calls += 1
+            rows = []
+            for messages in message_batches:
+                text = messages[-1]["content"]
+                right = re.search(r"\[([^]]+)\] right", text).group(1)
+                rows.append({choice: (0.75 if choice == right else 0.25) for choice in choice_ids})
+            return tuple(rows)
+
+    cases = tuple(make_case(f"case-{i}") for i in range(3))
+    scalar = CountingSemanticScoreAdapter()
+    batched = CountingSemanticScoreAdapter()
+    one = run_balanced_score_choice_suite(cases, scalar, case_batch_size=1)
+    two = run_balanced_score_choice_suite(cases, batched, case_batch_size=2)
+    assert [r["semantic_scores"] for r in one["results"]] == [r["semantic_scores"] for r in two["results"]]
+    assert [r["parsed_choice"] for r in one["results"]] == [r["parsed_choice"] for r in two["results"]]
+    assert scalar.calls == 3
+    assert batched.calls == 2
+    assert two["execution"] == {"case_batch_size": 2}
