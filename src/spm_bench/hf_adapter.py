@@ -274,3 +274,90 @@ class LocalHFAdapter:
                 for index, choice in enumerate(choices)
             })
         return tuple(rows)
+
+    def score_many_selected(
+        self,
+        message_batches: Sequence[Sequence[Mapping[str, str]]],
+        choice_ids: Sequence[str],
+    ) -> tuple[dict[str, float], ...]:
+        """Score only declared one-token choices without materializing full-vocabulary logits."""
+        tokenizer, model = self._load()
+        choices = tuple(choice_ids)
+        if not choices or any(not isinstance(choice, str) or not choice for choice in choices):
+            raise ValueError("choice_ids must contain non-empty strings")
+
+        token_ids: list[int] = []
+        for choice in choices:
+            encoded = tokenizer.encode(choice, add_special_tokens=False)
+            if len(encoded) != 1:
+                raise ValueError("each choice ID must encode to a single tokenizer token")
+            token_ids.append(encoded[0])
+
+        import torch
+        encoded_prompts = []
+        lengths: list[int] = []
+        for messages in message_batches:
+            prompt = tokenizer.apply_chat_template(
+                list(messages), tokenize=False, add_generation_prompt=True
+            ) + "["
+            encoded = tokenizer(prompt, return_tensors="pt")
+            encoded_prompts.append(encoded)
+            lengths.append(int(encoded["input_ids"].shape[-1]))
+        if not encoded_prompts:
+            return ()
+        max_length = max(lengths)
+        pad_token_id = getattr(tokenizer, "pad_token_id", None)
+        if pad_token_id is None:
+            pad_token_id = getattr(tokenizer, "eos_token_id", 0)
+        input_rows = []
+        mask_rows = []
+        for encoded, length in zip(encoded_prompts, lengths, strict=True):
+            padding = max_length - length
+            input_rows.append(torch.cat((
+                encoded["input_ids"][0],
+                torch.full((padding,), pad_token_id, dtype=encoded["input_ids"].dtype),
+            )))
+            mask_rows.append(torch.cat((
+                encoded["attention_mask"][0],
+                torch.zeros((padding,), dtype=encoded["attention_mask"].dtype),
+            )))
+        inputs = {
+            "input_ids": torch.stack(input_rows),
+            "attention_mask": torch.stack(mask_rows),
+        }
+        device = getattr(model, "device", None)
+        if device is not None:
+            inputs = {key: value.to(device) for key, value in inputs.items()}
+
+        prefix = getattr(model, "base_model_prefix", None)
+        backbone = getattr(model, prefix, None) if prefix else None
+        if backbone is None:
+            raise RuntimeError("model does not expose its causal backbone")
+        head = model.get_output_embeddings()
+        if head is None or not hasattr(head, "weight"):
+            raise RuntimeError("model does not expose output embedding weights")
+
+        with torch.no_grad():
+            hidden = backbone(**inputs).last_hidden_state
+            row_ids = torch.arange(hidden.shape[0], device=hidden.device)
+            positions = torch.tensor(
+                [length - 1 for length in lengths], device=hidden.device
+            )
+            final_hidden = hidden[row_ids, positions]
+            token_index = torch.tensor(token_ids, device=head.weight.device)
+            selected_weight = head.weight.index_select(0, token_index).to(final_hidden.device)
+            selected_bias = getattr(head, "bias", None)
+            if selected_bias is not None:
+                selected_bias = selected_bias.index_select(0, token_index).to(final_hidden.device)
+            selected_logits = torch.nn.functional.linear(
+                final_hidden, selected_weight, selected_bias
+            )
+            probabilities = torch.softmax(selected_logits.float(), dim=-1)
+
+        return tuple(
+            {
+                choice: float(probabilities[row, index].item())
+                for index, choice in enumerate(choices)
+            }
+            for row in range(probabilities.shape[0])
+        )

@@ -417,9 +417,14 @@ def run_balanced_score_choice_suite(
         "base_selector": "forced_bracket_prefix_declared_label_softmax",
         "layout": "crossed_cyclic_labels_and_order",
     }
-    score_many = getattr(adapter, "score_many", None)
-    if not callable(score_many):
-        raise TypeError("adapter must provide score_many for balanced semantic scoring")
+    score_many = getattr(adapter, "score_many_selected", None)
+    score_method = None
+    if callable(score_many):
+        score_method = "selected_output_projection_v1"
+    else:
+        score_many = getattr(adapter, "score_many", None)
+        if not callable(score_many):
+            raise TypeError("adapter must provide score_many for balanced semantic scoring")
 
     results_by_index = [None] * len(ordered_cases)
     for chunk_start in range(0, len(ordered_cases), case_batch_size):
@@ -459,7 +464,11 @@ def run_balanced_score_choice_suite(
         "schema_version": 1,
         "evaluation_mode": "balanced_semantic_score_v1",
         "choice_protocol": protocol,
-        "execution": {"case_batch_size": case_batch_size},
+        "execution": (
+            {"case_batch_size": case_batch_size, "score_method": score_method}
+            if score_method is not None
+            else {"case_batch_size": case_batch_size}
+        ),
         "benchmark_digest": benchmark_digest(ordered_cases),
         "model": {"id": adapter.model_id, "digest": adapter.model_digest},
         "results": results,

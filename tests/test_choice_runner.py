@@ -234,3 +234,26 @@ def test_balanced_score_suite_case_batching_preserves_results_and_reduces_calls(
     assert scalar.calls == 3
     assert batched.calls == 2
     assert two["execution"] == {"case_batch_size": 2}
+
+def test_balanced_score_suite_prefers_selected_projection_when_available():
+    from spm_bench.runner import run_balanced_score_choice_suite
+
+    class SelectedAdapter:
+        model_id = "selected-score"
+        model_digest = "e" * 64
+        def __init__(self):
+            self.full_calls = 0
+            self.selected_calls = 0
+        def score_many(self, message_batches, choice_ids):
+            self.full_calls += 1
+            raise AssertionError("full score_many path must not be used")
+        def score_many_selected(self, message_batches, choice_ids):
+            self.selected_calls += 1
+            return tuple({choice: (0.8 if choice == "b" else 0.2) for choice in choice_ids}
+                         for _ in message_batches)
+
+    adapter = SelectedAdapter()
+    manifest = run_balanced_score_choice_suite((make_case("case-1"),), adapter)
+    assert adapter.full_calls == 0
+    assert adapter.selected_calls == 1
+    assert manifest["execution"]["score_method"] == "selected_output_projection_v1"
