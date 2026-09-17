@@ -370,3 +370,65 @@ def test_score_many_uses_last_logit_optimization_for_equal_length_prompts(tmp_pa
     assert observed["logits_to_keep"] == 1
     assert scores[0]["b"] > scores[0]["a"]
     assert scores[1]["a"] > scores[1]["b"]
+
+
+def test_score_many_selected_projects_only_declared_output_rows(tmp_path, monkeypatch):
+    import torch
+    model_path = tmp_path / "model"
+    model_path.mkdir()
+    (model_path / "config.json").write_text("{}", encoding="utf-8")
+    observed = {"lm_calls": 0, "base_calls": 0}
+
+    class FakeTokenizer:
+        pad_token_id = 0
+        eos_token_id = 2
+        def apply_chat_template(self, messages, tokenize, add_generation_prompt): return messages[0]["content"]
+        def __call__(self, prompt, return_tensors):
+            ids = [1, 2] if prompt.startswith("short") else [1, 2, 3]
+            return {"input_ids": torch.tensor([ids]), "attention_mask": torch.ones((1, len(ids)), dtype=torch.long)}
+        def encode(self, value, add_special_tokens=False): return {"a": [10], "b": [20]}[value]
+    class FakeTokenizerClass:
+        @classmethod
+        def from_pretrained(cls, path, **kwargs): return FakeTokenizer()
+
+    class FakeBaseOutputs:
+        def __init__(self):
+            self.last_hidden_state = torch.zeros((2, 3, 4))
+            self.last_hidden_state[0, 1, 0] = 1.0
+            self.last_hidden_state[1, 2, 1] = 1.0
+
+    class FakeBackbone:
+        def __call__(self, **kwargs):
+            observed["base_calls"] += 1
+            return FakeBaseOutputs()
+
+    class FakeHead:
+        def __init__(self):
+            self.weight = torch.zeros((32, 4))
+            self.weight[10, 1] = 4.0
+            self.weight[20, 0] = 5.0
+            self.bias = None
+    class FakeModel:
+        device = "cpu"
+        base_model_prefix = "model"
+        def __init__(self):
+            self.model = FakeBackbone()
+            self._head = FakeHead()
+        def eval(self): return self
+        def __call__(self, **kwargs):
+            observed["lm_calls"] += 1
+            raise AssertionError("full LM forward must not be used")
+        def get_output_embeddings(self): return self._head
+
+    class FakeModelClass:
+        @classmethod
+        def from_pretrained(cls, path, **kwargs): return FakeModel()
+
+    monkeypatch.setattr(hf_adapter, "_load_hf_classes", lambda: (FakeTokenizerClass, FakeModelClass))
+    adapter = LocalHFAdapter(model_path, "model-x", "rev-1", {})
+    batches = (({"role": "user", "content": "short"},), ({"role": "user", "content": "longer"},))
+    scores = adapter.score_many_selected(batches, ("a", "b"))
+    assert observed == {"lm_calls": 0, "base_calls": 1}
+    assert scores[0]["b"] > scores[0]["a"]
+    assert scores[1]["a"] > scores[1]["b"]
+    assert all(abs(sum(row.values()) - 1.0) < 1e-6 for row in scores)
