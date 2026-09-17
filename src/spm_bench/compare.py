@@ -110,3 +110,60 @@ def baseline_readiness(
         "subject_count": len(set(subjects)),
         "blockers": blockers,
     }
+
+
+def baseline_readiness_exact(
+    *,
+    suite_frozen: bool,
+    benchmark_digest: str,
+    subject_model_digests: Mapping[str, str],
+    inherited_subject_digest: str,
+    evaluator_commit: str,
+    score_method: str,
+    evidences: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Fail closed unless subject, model, evaluator, and scoring method all bind exactly."""
+    subjects = tuple(subject_model_digests)
+    base = baseline_readiness(
+        suite_frozen=suite_frozen,
+        benchmark_digest=benchmark_digest,
+        subject_digests=subjects,
+        inherited_subject_digest=inherited_subject_digest,
+        evidences=evidences,
+    )
+    blockers = list(base["blockers"])
+    if not isinstance(evaluator_commit, str) or not evaluator_commit:
+        blockers.append("evaluator commit is not bound")
+    if not isinstance(score_method, str) or not score_method:
+        blockers.append("score method is not bound")
+
+    evidence_by_subject = {
+        item.get("subject_digest"): item for item in evidences
+        if isinstance(item, Mapping)
+    }
+    for subject, expected_model_digest in subject_model_digests.items():
+        evidence = evidence_by_subject.get(subject)
+        if evidence is None:
+            continue
+        if evidence.get("evaluator_commit") != evaluator_commit:
+            blockers.append(f"evaluator commit mismatch for subject {subject}")
+        run = evidence.get("run")
+        if not isinstance(run, Mapping):
+            continue
+        model = run.get("model")
+        if not isinstance(model, Mapping) or model.get("digest") != expected_model_digest:
+            blockers.append(f"model digest mismatch for subject {subject}")
+        execution = run.get("execution")
+        if not isinstance(execution, Mapping) or execution.get("score_method") != score_method:
+            blockers.append(f"score method mismatch for subject {subject}")
+        run_digest = run.get("run_digest")
+        if not isinstance(run_digest, str) or len(run_digest) != 64:
+            blockers.append(f"run digest is not bound for subject {subject}")
+
+    return {
+        "status": "READY" if not blockers else "NOT_READY",
+        "subject_count": len(set(subjects)),
+        "blockers": blockers,
+        "evaluator_commit": evaluator_commit,
+        "score_method": score_method,
+    }

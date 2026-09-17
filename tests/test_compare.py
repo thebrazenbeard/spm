@@ -109,3 +109,58 @@ def test_baseline_readiness_requires_frozen_suite_and_backbone_membership():
     assert status["status"] == "NOT_READY"
     assert "public suite is not frozen" in status["blockers"]
     assert "inherited backbone subject is not in the subject set" in status["blockers"]
+
+
+def test_exact_baseline_readiness_binds_model_evaluator_and_score_method():
+    from spm_bench.compare import baseline_readiness_exact
+
+    subjects = ["1" * 64, "2" * 64, "3" * 64]
+    models = {subject: str(index) * 64 for index, subject in enumerate(subjects, start=4)}
+    evaluator = "e" * 40
+    evidences = []
+    for subject in subjects:
+        item = evidence(subject)
+        item["evaluator_commit"] = evaluator
+        item["run"]["model"] = {"id": subject, "digest": models[subject]}
+        item["run"]["execution"] = {"score_method": "selected_output_projection_v1"}
+        evidences.append(item)
+    status = baseline_readiness_exact(
+        suite_frozen=True,
+        benchmark_digest=BENCHMARK,
+        subject_model_digests=models,
+        inherited_subject_digest="3" * 64,
+        evaluator_commit=evaluator,
+        score_method="selected_output_projection_v1",
+        evidences=evidences,
+    )
+    assert status["status"] == "READY"
+    assert status["blockers"] == []
+
+
+def test_exact_baseline_readiness_fails_on_evaluator_or_model_drift():
+    from spm_bench.compare import baseline_readiness_exact
+
+    subjects = ["1" * 64, "2" * 64, "3" * 64]
+    models = {subject: str(index) * 64 for index, subject in enumerate(subjects, start=4)}
+    evaluator = "e" * 40
+    evidences = []
+    for subject in subjects:
+        item = evidence(subject)
+        item["evaluator_commit"] = evaluator
+        item["run"]["model"] = {"id": subject, "digest": models[subject]}
+        item["run"]["execution"] = {"score_method": "selected_output_projection_v1"}
+        evidences.append(item)
+    evidences[1]["evaluator_commit"] = "f" * 40
+    evidences[2]["run"]["model"]["digest"] = "9" * 64
+    status = baseline_readiness_exact(
+        suite_frozen=True,
+        benchmark_digest=BENCHMARK,
+        subject_model_digests=models,
+        inherited_subject_digest="3" * 64,
+        evaluator_commit=evaluator,
+        score_method="selected_output_projection_v1",
+        evidences=evidences,
+    )
+    assert status["status"] == "NOT_READY"
+    assert any("evaluator commit mismatch" in blocker for blocker in status["blockers"])
+    assert any("model digest mismatch" in blocker for blocker in status["blockers"])
