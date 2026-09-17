@@ -60,6 +60,8 @@ class MemoryRecord:
 @dataclass(frozen=True, slots=True)
 class RetrievalReceipt:
     selected_records: tuple[MemoryRecord, ...]
+    recency_records: tuple[MemoryRecord, ...]
+    lexical_records: tuple[MemoryRecord, ...]
     rendered_text: str
     token_count: int
     truncated: bool
@@ -150,52 +152,90 @@ class ArmMMemory:
             raise ValueError("max_retrieved_tokens must be a positive integer")
         excluded = set(excluded_record_digests)
         candidates = tuple(record for record in self.records if record.digest not in excluded)
-        recency_quota = (max_retrieved_tokens + 1) // 2
-        lexical_quota = max_retrieved_tokens - recency_quota
+        header = "MEMORY_CONTEXT_V1\nRECENCY\n\nLEXICAL\n"
+        header_tokens = len(_token_ids(tokenizer, header))
+        content_budget = max_retrieved_tokens - header_tokens
+        if candidates and content_budget < 2:
+            raise ValueError("token budget is too small to preserve both retrieval lanes")
 
-        selected: dict[str, MemoryRecord] = {}
-        recency_cost = 0
-        for record in reversed(candidates):
-            if recency_cost >= recency_quota:
-                break
-            selected[record.digest] = record
-            recency_cost += len(_token_ids(tokenizer, _render_record(record)))
+        def pack(records, budget):
+            selected = []
+            fragments = []
+            used = 0
+            partial = False
+            for record in records:
+                if used >= budget:
+                    break
+                ids = _token_ids(tokenizer, record.content)
+                if not ids:
+                    continue
+                take = ids[: budget - used]
+                if len(take) < len(ids):
+                    partial = True
+                selected.append(record)
+                fragments.append(tokenizer.decode(take, skip_special_tokens=True))
+                used += len(take)
+            return tuple(selected), "\n".join(fragments), used, partial
 
-        lexical_candidates = tuple(record for record in candidates if record.digest not in selected)
+        recency_budget = (content_budget + 1) // 2
+        lexical_budget = content_budget - recency_budget
+        recency_order = tuple(reversed(candidates))
+        recency_records, recency_text, recency_used, recency_partial = pack(recency_order, recency_budget)
+        recency_ids = {record.digest for record in recency_records}
+        lexical_candidates = tuple(record for record in candidates if record.digest not in recency_ids)
         scores = _bm25_scores(lexical_candidates, current_text)
-        ranked = sorted(
+        lexical_order = tuple(sorted(
             lexical_candidates,
             key=lambda record: (-scores[record.digest], -record.sequence, record.digest),
-        )
-        lexical_cost = 0
-        for record in ranked:
-            if lexical_cost >= lexical_quota:
-                break
-            selected[record.digest] = record
-            lexical_cost += len(_token_ids(tokenizer, _render_record(record)))
+        ))
+        lexical_records, lexical_text, lexical_used, lexical_partial = pack(lexical_order, lexical_budget)
 
-        ordered = tuple(sorted(selected.values(), key=lambda record: record.sequence))
-        rendered = "MEMORY_CONTEXT_V1\n" + "\n".join(_render_record(record) for record in ordered)
+        # Reallocate an unused lane allowance before rendering, without changing rank order.
+        spare = content_budget - recency_used - lexical_used
+        if spare > 0 and lexical_used < lexical_budget:
+            recency_budget += spare
+            recency_records, recency_text, recency_used, recency_partial = pack(recency_order, recency_budget)
+            recency_ids = {record.digest for record in recency_records}
+        elif spare > 0 and recency_used < recency_budget:
+            lexical_budget += spare
+            lexical_candidates = tuple(record for record in candidates if record.digest not in recency_ids)
+            scores = _bm25_scores(lexical_candidates, current_text)
+            lexical_order = tuple(sorted(
+                lexical_candidates,
+                key=lambda record: (-scores[record.digest], -record.sequence, record.digest),
+            ))
+            lexical_records, lexical_text, lexical_used, lexical_partial = pack(lexical_order, lexical_budget)
+
+        def render():
+            return f"MEMORY_CONTEXT_V1\nRECENCY\n{recency_text}\nLEXICAL\n{lexical_text}"
+
+        rendered = render()
         encoded = _token_ids(tokenizer, rendered)
-        truncated = len(encoded) > max_retrieved_tokens
-        if truncated:
-            encoded = encoded[:max_retrieved_tokens]
-            rendered = tokenizer.decode(encoded, skip_special_tokens=True)
-        token_count = len(encoded)
+        if len(encoded) > max_retrieved_tokens:
+            raise RuntimeError("retrieval lane packing exceeded the hard token ceiling")
+        ordered = tuple(sorted(
+            {record.digest: record for record in recency_records + lexical_records}.values(),
+            key=lambda record: record.sequence,
+        ))
+        truncated = recency_partial or lexical_partial or len(ordered) < len(candidates)
         identity = {
             "policy_version": POLICY_VERSION,
             "current_text_digest": _sha256_text(current_text),
             "excluded_record_digests": sorted(excluded),
+            "recency_record_digests": [record.digest for record in recency_records],
+            "lexical_record_digests": [record.digest for record in lexical_records],
             "selected_record_digests": [record.digest for record in ordered],
             "max_retrieved_tokens": max_retrieved_tokens,
-            "token_count": token_count,
+            "token_count": len(encoded),
             "truncated": truncated,
             "rendered_digest": _sha256_text(rendered),
         }
         return RetrievalReceipt(
             selected_records=ordered,
+            recency_records=recency_records,
+            lexical_records=lexical_records,
             rendered_text=rendered,
-            token_count=token_count,
+            token_count=len(encoded),
             truncated=truncated,
             receipt_digest=_sha256_text(_canonical_json(identity)),
         )

@@ -89,3 +89,25 @@ def test_retrieval_is_deterministic_and_can_exclude_current_context_records():
     assert one == two
     assert memory.records[2].digest not in {item.digest for item in one.selected_records}
     assert one.receipt_digest == two.receipt_digest
+
+
+def test_tight_budget_delivers_content_from_both_retrieval_lanes():
+    tokenizer = WordTokenizer()
+    memory = ArmMMemory.empty()
+    for sequence, text in (
+        (1, "contract review archive"),
+        (2, "blue notebook assigned to Niko"),
+        (3, "weather unrelated note"),
+        (4, "latest ordinary update"),
+    ):
+        memory = memory.append(record(sequence, text), byte_ceiling=4096)
+    receipt = memory.retrieve(
+        current_text="Where is the blue notebook now",
+        tokenizer=tokenizer,
+        max_retrieved_tokens=12,
+    )
+    assert "RECENCY" in receipt.rendered_text
+    assert "LEXICAL" in receipt.rendered_text
+    assert "latest" in receipt.rendered_text
+    assert "blue" in receipt.rendered_text
+    assert receipt.token_count <= 12
