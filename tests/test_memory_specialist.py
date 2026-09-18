@@ -1,6 +1,10 @@
 import pytest
 
-from spm_bench.memory_specialist import (\n    memory_adapter_active,\n    verify_adapter_artifacts,\n    verify_base_inventory,\n)
+from spm_bench.memory_specialist import (
+    memory_adapter_active,
+    verify_adapter_artifacts,
+    verify_base_inventory,
+)
 
 
 def test_base_inventory_verification_binds_loaded_model_directory(tmp_path):
