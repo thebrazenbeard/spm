@@ -21,6 +21,48 @@ def _sha256_text(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _require_sha256(value: str, field: str) -> str:
+    if (
+        not isinstance(value, str)
+        or len(value) != 64
+        or any(ch not in "0123456789abcdef" for ch in value)
+    ):
+        raise ValueError(f"{field} must be a lowercase SHA-256")
+    return value
+
+
+def verify_adapter_artifacts(
+    adapter_path: str | Path,
+    *,
+    adapter_digest: str,
+    adapter_config_digest: str,
+) -> None:
+    """Bind the loaded PEFT adapter to the qualified weights and config bytes."""
+    adapter_path = Path(adapter_path)
+    expected_weights = _require_sha256(adapter_digest, "adapter_digest")
+    expected_config = _require_sha256(
+        adapter_config_digest, "adapter_config_digest"
+    )
+    weights_path = adapter_path / "adapter_model.safetensors"
+    config_path = adapter_path / "adapter_config.json"
+    if not weights_path.is_file():
+        raise RuntimeError("qualified adapter weights are missing")
+    if not config_path.is_file():
+        raise RuntimeError("qualified adapter config is missing")
+    if _sha256_file(weights_path) != expected_weights:
+        raise RuntimeError("adapter weights digest mismatch")
+    if _sha256_file(config_path) != expected_config:
+        raise RuntimeError("adapter config digest mismatch")
+
+
 class _MemorySpecialistView:
     def __init__(self, runtime: "MemorySpecialistRuntime", *, active: bool) -> None:
         self._runtime = runtime
@@ -55,6 +97,7 @@ class MemorySpecialistRuntime:
         model_id: str,
         base_inventory_digest: str,
         adapter_digest: str,
+        adapter_config_digest: str,
         microbatch: int = 3,
     ) -> None:
         if microbatch <= 0:
@@ -81,6 +124,12 @@ class MemorySpecialistRuntime:
         adapter_digest: str,
         microbatch: int = 3,
     ) -> "MemorySpecialistRuntime":
+        verify_adapter_artifacts(
+            adapter_path,
+            adapter_digest=adapter_digest,
+            adapter_config_digest=adapter_config_digest,
+        )
+
         import torch
         from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
         from peft import PeftModel
