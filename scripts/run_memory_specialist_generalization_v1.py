@@ -22,6 +22,7 @@ BASE_PATH=Path(r"C:\Users\patri\.cache\huggingface\hub\models--Qwen--Qwen2.5-1.5
 BASE_ID="Qwen/Qwen2.5-1.5B-Instruct"
 BASE_DIGEST="866e9c64bd94ae56fbaf5f2a46c0d6578b9a44baeab1ebc269e43018f3b1766d"
 ADAPTER_DIGEST="c8a835ccd2ab2547fcf2bc3fc5757a8b0b76584f670a3ad925470f5e3e7d1098"
+ADAPTER_CONFIG_DIGEST="10afd4d6a8153d948cf4e8e6ecddf9057a595c4c465e38f93afbdd5ce5781adf"
 
 def sha(path:Path)->str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -99,7 +100,8 @@ def main():
 
     runtime=MemorySpecialistRuntime.load_quantized(
         base_path=BASE_PATH,adapter_path=adapter_path,model_id=BASE_ID,
-        base_inventory_digest=BASE_DIGEST,adapter_digest=ADAPTER_DIGEST,microbatch=3,
+        base_inventory_digest=BASE_DIGEST,adapter_digest=ADAPTER_DIGEST,
+        adapter_config_digest=ADAPTER_CONFIG_DIGEST,microbatch=3,
     )
     source=load_jsonl_cases(data_path)
     resets=tuple(converted_reset(case) for case in source)
