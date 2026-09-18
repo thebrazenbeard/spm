@@ -21,6 +21,9 @@ DEFAULT_BASE_INVENTORY = (
 DEFAULT_ADAPTER_DIGEST = (
     "c8a835ccd2ab2547fcf2bc3fc5757a8b0b76584f670a3ad925470f5e3e7d1098"
 )
+DEFAULT_ADAPTER_CONFIG_DIGEST = (
+    "10afd4d6a8153d948cf4e8e6ecddf9057a595c4c465e38f93afbdd5ce5781adf"
+)
 DEFAULT_MODEL_ID = "Qwen/Qwen2.5-1.5B-Instruct"
 
 
@@ -82,11 +85,6 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--byte-ceiling", type=int, default=8192)
     parser.add_argument("--max-retrieved-tokens", type=int, default=512)
-    parser.add_argument("--model-id", default=DEFAULT_MODEL_ID)
-    parser.add_argument(
-        "--base-inventory-digest", default=DEFAULT_BASE_INVENTORY
-    )
-    parser.add_argument("--adapter-digest", default=DEFAULT_ADAPTER_DIGEST)
     return parser
 
 
@@ -98,9 +96,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     runtime = MemorySpecialistRuntime.load_quantized(
         base_path=args.base_path,
         adapter_path=args.adapter_dir,
-        model_id=args.model_id,
-        base_inventory_digest=args.base_inventory_digest,
-        adapter_digest=args.adapter_digest,
+        model_id=DEFAULT_MODEL_ID,
+        base_inventory_digest=DEFAULT_BASE_INVENTORY,
+        adapter_digest=DEFAULT_ADAPTER_DIGEST,
+        adapter_config_digest=DEFAULT_ADAPTER_CONFIG_DIGEST,
         microbatch=3,
     )
     records = build_records(args.memory, source_class=args.source_class)
