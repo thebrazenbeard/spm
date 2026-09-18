@@ -111,3 +111,33 @@ def test_tight_budget_delivers_content_from_both_retrieval_lanes():
     assert "latest" in receipt.rendered_text
     assert "blue" in receipt.rendered_text
     assert receipt.token_count <= 12
+
+
+class BoundaryPenaltyTokenizer(WordTokenizer):
+    """Models tokenizers whose rendered separators add tokens after lane packing."""
+
+    def encode(self, text, add_special_tokens=False):
+        return text.split() + ["<nl>"] * text.count("\n")
+
+
+def test_retrieval_rebalances_when_combined_rendering_exceeds_token_ceiling():
+    tokenizer = BoundaryPenaltyTokenizer()
+    memory = ArmMMemory.empty()
+    for sequence in range(1, 9):
+        memory = memory.append(
+            record(sequence, f"subject{sequence} update value{sequence} active"),
+            byte_ceiling=4096,
+        )
+
+    receipt = memory.retrieve(
+        current_text="subject2 current value",
+        tokenizer=tokenizer,
+        max_retrieved_tokens=24,
+    )
+
+    assert receipt.token_count <= 24
+    assert receipt.recency_records
+    assert receipt.lexical_records
+    assert receipt.truncated is True
+    assert "RECENCY" in receipt.rendered_text
+    assert "LEXICAL" in receipt.rendered_text

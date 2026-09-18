@@ -180,39 +180,104 @@ class ArmMMemory:
         recency_budget = (content_budget + 1) // 2
         lexical_budget = content_budget - recency_budget
         recency_order = tuple(reversed(candidates))
-        recency_records, recency_text, recency_used, recency_partial = pack(recency_order, recency_budget)
-        recency_ids = {record.digest for record in recency_records}
-        lexical_candidates = tuple(record for record in candidates if record.digest not in recency_ids)
-        scores = _bm25_scores(lexical_candidates, current_text)
-        lexical_order = tuple(sorted(
-            lexical_candidates,
-            key=lambda record: (-scores[record.digest], -record.sequence, record.digest),
-        ))
-        lexical_records, lexical_text, lexical_used, lexical_partial = pack(lexical_order, lexical_budget)
 
-        # Reallocate an unused lane allowance before rendering, without changing rank order.
-        spare = content_budget - recency_used - lexical_used
-        if spare > 0 and lexical_used < lexical_budget:
-            recency_budget += spare
-            recency_records, recency_text, recency_used, recency_partial = pack(recency_order, recency_budget)
+        def pack_lanes(recency_allowance: int, lexical_allowance: int):
+            recency_records, recency_text, recency_used, recency_partial = pack(
+                recency_order, recency_allowance
+            )
             recency_ids = {record.digest for record in recency_records}
-        elif spare > 0 and recency_used < recency_budget:
-            lexical_budget += spare
-            lexical_candidates = tuple(record for record in candidates if record.digest not in recency_ids)
+            lexical_candidates = tuple(
+                record for record in candidates if record.digest not in recency_ids
+            )
             scores = _bm25_scores(lexical_candidates, current_text)
             lexical_order = tuple(sorted(
                 lexical_candidates,
                 key=lambda record: (-scores[record.digest], -record.sequence, record.digest),
             ))
-            lexical_records, lexical_text, lexical_used, lexical_partial = pack(lexical_order, lexical_budget)
+            lexical_records, lexical_text, lexical_used, lexical_partial = pack(
+                lexical_order, lexical_allowance
+            )
+            return (
+                recency_records,
+                recency_text,
+                recency_used,
+                recency_partial,
+                lexical_records,
+                lexical_text,
+                lexical_used,
+                lexical_partial,
+            )
+
+        (
+            recency_records,
+            recency_text,
+            recency_used,
+            recency_partial,
+            lexical_records,
+            lexical_text,
+            lexical_used,
+            lexical_partial,
+        ) = pack_lanes(recency_budget, lexical_budget)
+
+        # Reallocate an unused lane allowance before rendering, without changing rank order.
+        spare = content_budget - recency_used - lexical_used
+        if spare > 0 and lexical_used < lexical_budget:
+            recency_budget += spare
+        elif spare > 0 and recency_used < recency_budget:
+            lexical_budget += spare
+        if spare > 0:
+            (
+                recency_records,
+                recency_text,
+                recency_used,
+                recency_partial,
+                lexical_records,
+                lexical_text,
+                lexical_used,
+                lexical_partial,
+            ) = pack_lanes(recency_budget, lexical_budget)
 
         def render():
             return f"MEMORY_CONTEXT_V1\nRECENCY\n{recency_text}\nLEXICAL\n{lexical_text}"
 
         rendered = render()
         encoded = _token_ids(tokenizer, rendered)
-        if len(encoded) > max_retrieved_tokens:
-            raise RuntimeError("retrieval lane packing exceeded the hard token ceiling")
+
+        # Tokenization is not generally additive across decoded fragments and
+        # separators. If the fully rendered block grows past the hard ceiling,
+        # deterministically shrink lane allowances and repack until the final
+        # tokenization fits. Preserve at least one token per lane when there are
+        # enough candidate records to make both lanes meaningful.
+        min_recency_budget = 1 if candidates else 0
+        min_lexical_budget = 1 if len(candidates) > 1 else 0
+        while len(encoded) > max_retrieved_tokens:
+            recency_reducible = recency_budget - min_recency_budget
+            lexical_reducible = lexical_budget - min_lexical_budget
+            if recency_reducible <= 0 and lexical_reducible <= 0:
+                raise ValueError(
+                    "token budget cannot preserve both retrieval lanes after rendering"
+                )
+
+            overflow = len(encoded) - max_retrieved_tokens
+            if recency_reducible >= lexical_reducible and recency_reducible > 0:
+                recency_budget -= min(max(overflow, 1), recency_reducible)
+            elif lexical_reducible > 0:
+                lexical_budget -= min(max(overflow, 1), lexical_reducible)
+            else:
+                recency_budget -= min(max(overflow, 1), recency_reducible)
+
+            (
+                recency_records,
+                recency_text,
+                recency_used,
+                recency_partial,
+                lexical_records,
+                lexical_text,
+                lexical_used,
+                lexical_partial,
+            ) = pack_lanes(recency_budget, lexical_budget)
+            rendered = render()
+            encoded = _token_ids(tokenizer, rendered)
         ordered = tuple(sorted(
             {record.digest: record for record in recency_records + lexical_records}.values(),
             key=lambda record: record.sequence,
