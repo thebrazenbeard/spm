@@ -8,6 +8,9 @@ from pathlib import Path
 from typing import Any, Sequence, Mapping
 
 
+from .hf_adapter import local_inventory_digest
+
+
 def memory_adapter_active(retrieved_record_count: int) -> bool:
     """Enable the specialist only when retrieval explicitly returned records."""
     if isinstance(retrieved_record_count, bool) or not isinstance(retrieved_record_count, int):
@@ -37,6 +40,17 @@ def _require_sha256(value: str, field: str) -> str:
     ):
         raise ValueError(f"{field} must be a lowercase SHA-256")
     return value
+
+
+def verify_base_inventory(
+    base_path: str | Path,
+    base_inventory_digest: str,
+) -> None:
+    """Bind the loaded local base model to the qualified content inventory."""
+    expected = _require_sha256(base_inventory_digest, "base_inventory_digest")
+    observed = local_inventory_digest(base_path)
+    if observed != expected:
+        raise RuntimeError("base model inventory digest mismatch")
 
 
 def verify_adapter_artifacts(
@@ -124,6 +138,7 @@ class MemorySpecialistRuntime:
         adapter_digest: str,
         microbatch: int = 3,
     ) -> "MemorySpecialistRuntime":
+        verify_base_inventory(base_path, base_inventory_digest)
         verify_adapter_artifacts(
             adapter_path,
             adapter_digest=adapter_digest,
