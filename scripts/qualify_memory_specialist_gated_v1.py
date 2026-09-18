@@ -20,7 +20,7 @@ from spm_bench.runner import run_balanced_score_choice_suite
 BASE_PATH=Path(r"C:\Users\patri\.cache\huggingface\hub\models--Qwen--Qwen2.5-1.5B-Instruct\snapshots\989aa7980e4cf806f80c7fef2b1adb7bc71aa306")
 MODEL_ID="Qwen/Qwen2.5-1.5B-Instruct"
 BASE_INVENTORY="866e9c64bd94ae56fbaf5f2a46c0d6578b9a44baeab1ebc269e43018f3b1766d"
-ADAPTER_CONFIG_DIGEST="10afd4d6a8153d948cf4e8e6ecddf9057a595c4c465e38f93afbdd5ce5781adf"
+ADAPTER_CONFIG_DIGEST="3ad675932f62fd5aa6a10d8893ca11fb19011e8519bc5379d7a6129026a362d3"
 QUALIFICATION_PATH=ROOT/"experiments"/"spm_memory_specialist_gated_runtime_v1.json"
 
 
