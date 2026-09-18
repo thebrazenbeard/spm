@@ -60,3 +60,36 @@ def test_state_shape_validation_fails_closed():
         assert "prior_state" in str(error)
     else:
         raise AssertionError("invalid prior state width was accepted")
+
+def test_broadcast_reinject_conditions_every_real_token_without_touching_padding():
+    module = make_module()
+    hidden = torch.zeros(2, 5, 2048)
+    state = torch.randn(2, 128)
+    mask = torch.tensor([
+        [1, 1, 1, 0, 0],
+        [1, 1, 1, 1, 1],
+    ])
+
+    conditioned = module.reinject_broadcast(hidden, state, mask)
+
+    assert conditioned.shape == hidden.shape
+    assert torch.count_nonzero(conditioned[0, :3]) > 0
+    assert torch.count_nonzero(conditioned[0, 3:]) == 0
+    assert torch.count_nonzero(conditioned[1]) > 0
+    assert torch.count_nonzero(hidden) == 0
+    # No new parameters: topology changes, capacity does not.
+    assert sum(parameter.numel() for parameter in module.parameters()) == 623_488
+
+
+def test_broadcast_reinject_rejects_bad_attention_mask_shape():
+    module = make_module()
+    hidden = torch.zeros(2, 5, 2048)
+    state = torch.randn(2, 128)
+    bad_mask = torch.ones(2, 4)
+
+    try:
+        module.reinject_broadcast(hidden, state, bad_mask)
+    except ValueError as error:
+        assert "attention_mask" in str(error)
+    else:
+        raise AssertionError("invalid attention-mask shape was accepted")

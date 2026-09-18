@@ -74,3 +74,28 @@ class VectorStateModule(nn.Module):
             hidden_states.device
         )
         return conditioned
+
+    def reinject_broadcast(
+        self,
+        hidden_states: torch.Tensor,
+        state: torch.Tensor,
+        attention_mask: torch.Tensor,
+    ) -> torch.Tensor:
+        """Add the same projected state to every real token position."""
+        if hidden_states.ndim != 3 or hidden_states.shape[-1] != self.hidden_size:
+            raise ValueError("hidden_states must have shape [batch, seq, hidden_size]")
+        batch_size, sequence_length, _ = hidden_states.shape
+        if state.shape != (batch_size, self.state_size):
+            raise ValueError("state must have shape [batch, state_size]")
+        if attention_mask.shape != (batch_size, sequence_length):
+            raise ValueError("attention_mask must have shape [batch, seq]")
+
+        delta = self.state_to_hidden(state).to(
+            device=hidden_states.device,
+            dtype=hidden_states.dtype,
+        )
+        real_tokens = attention_mask.to(
+            device=hidden_states.device,
+            dtype=hidden_states.dtype,
+        ).unsqueeze(-1)
+        return hidden_states + delta.unsqueeze(1) * real_tokens
