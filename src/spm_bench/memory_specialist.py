@@ -192,3 +192,112 @@ class MemorySpecialistRuntime:
                     for column, choice in enumerate(choices)
                 })
         return tuple(rows_out)
+
+
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True, slots=True)
+class MemoryResolution:
+    chosen_index: int | None
+    chosen_text: str | None
+    semantic_scores: tuple[float, float, float]
+    adapter_active: bool
+    retrieval_receipt_digest: str
+    selected_record_digests: tuple[str, ...]
+    token_count: int
+    truncated: bool
+
+
+def resolve_memory_choice(
+    runtime: MemorySpecialistRuntime,
+    *,
+    memory_records,
+    query: str,
+    choices,
+    byte_ceiling: int = 8192,
+    max_retrieved_tokens: int = 512,
+) -> MemoryResolution:
+    """Resolve one of three semantic candidates using bounded retrieved memory."""
+    from .arm_m_memory import ArmMMemory
+    from .case import BenchmarkCase, BenchmarkChoice, BenchmarkTurn
+    from .runner import _balanced_layouts
+
+    if not isinstance(query, str) or not query.strip():
+        raise ValueError("query must be a non-empty string")
+    choice_texts = tuple(choices)
+    if len(choice_texts) != 3:
+        raise ValueError("exactly three choices are required")
+    if any(not isinstance(choice, str) or not choice.strip() for choice in choice_texts):
+        raise ValueError("choices must be non-empty strings")
+    if len(set(choice_texts)) != 3:
+        raise ValueError("choices must be distinct")
+
+    memory = ArmMMemory.empty()
+    records = tuple(memory_records)
+    for record in records:
+        memory = memory.append(record, byte_ceiling=byte_ceiling)
+
+    receipt = memory.retrieve(
+        current_text=query,
+        tokenizer=runtime.tokenizer,
+        max_retrieved_tokens=max_retrieved_tokens,
+    )
+    adapter_active = bool(receipt.selected_records)
+    if adapter_active:
+        context = (
+            "Persistent memory from earlier interactions:\n"
+            f"{receipt.rendered_text}\n\n"
+            f"{query}"
+        )
+    else:
+        context = query
+
+    case = BenchmarkCase(
+        case_id="memory_resolution_runtime",
+        version=1,
+        family="runtime_resolution",
+        turns=(BenchmarkTurn(role="user", content=context),),
+        choices=tuple(
+            BenchmarkChoice(choice_id=choice_id, text=text)
+            for choice_id, text in zip(("a", "b", "c"), choice_texts, strict=True)
+        ),
+        expected_choice="a",
+        risk_class="runtime",
+        tags=("memory_specialist_runtime",),
+    )
+    labels, layouts, message_batches = _balanced_layouts(case)
+    view = runtime.view_for_retrieval(len(receipt.selected_records))
+    score_rows = tuple(view.score_many_selected(message_batches, labels))
+    if len(score_rows) != len(layouts):
+        raise RuntimeError("memory specialist returned wrong number of score rows")
+
+    totals = [0.0, 0.0, 0.0]
+    for (order, assigned), row in zip(layouts, score_rows, strict=True):
+        if set(row) != set(labels):
+            raise RuntimeError("score row did not cover declared labels")
+        for label in labels:
+            position = assigned.index(label)
+            semantic_index = order[position]
+            totals[semantic_index] += float(row[label])
+    semantic_scores = tuple(value / len(layouts) for value in totals)
+    best = max(semantic_scores)
+    winners = [
+        index for index, value in enumerate(semantic_scores)
+        if abs(value - best) <= 1e-12
+    ]
+    chosen_index = winners[0] if len(winners) == 1 else None
+    chosen_text = choice_texts[chosen_index] if chosen_index is not None else None
+
+    return MemoryResolution(
+        chosen_index=chosen_index,
+        chosen_text=chosen_text,
+        semantic_scores=semantic_scores,
+        adapter_active=adapter_active,
+        retrieval_receipt_digest=receipt.receipt_digest,
+        selected_record_digests=tuple(
+            record.digest for record in receipt.selected_records
+        ),
+        token_count=receipt.token_count,
+        truncated=receipt.truncated,
+    )

@@ -13,3 +13,83 @@ def test_memory_adapter_activation_depends_only_on_retrieval_state():
 def test_memory_adapter_activation_fails_closed_on_invalid_count(value):
     with pytest.raises((TypeError, ValueError)):
         memory_adapter_active(value)
+
+
+class _WordTokenizer:
+    def encode(self, text, add_special_tokens=False):
+        return text.split()
+
+    def decode(self, tokens, skip_special_tokens=True):
+        return " ".join(tokens)
+
+
+class _FakeView:
+    def __init__(self, active):
+        self.memory_active = active
+
+    def score_many_selected(self, message_batches, choice_ids):
+        rows = []
+        for messages in message_batches:
+            choices_block = messages[-1]["content"].split("Choices:\n", 1)[1]
+            target = None
+            for line in choices_block.splitlines():
+                if line.startswith("[") and "CURRENT" in line:
+                    target = line[1:line.index("]")]
+                    break
+            if target is None:
+                target = choice_ids[0]
+            rows.append({
+                choice: 0.9 if choice == target else 0.05
+                for choice in choice_ids
+            })
+        return tuple(rows)
+
+
+class _FakeRuntime:
+    def __init__(self):
+        self.tokenizer = _WordTokenizer()
+
+    def view_for_retrieval(self, retrieved_record_count):
+        return _FakeView(retrieved_record_count > 0)
+
+
+def test_resolve_memory_choice_returns_semantic_winner_and_provenance():
+    from spm_bench.arm_m_memory import MemoryRecord
+    from spm_bench.memory_specialist import resolve_memory_choice
+
+    runtime = _FakeRuntime()
+    records = (
+        MemoryRecord.create(
+            sequence=1, source_class="user", content="The old status was STALE."
+        ),
+        MemoryRecord.create(
+            sequence=2, source_class="user", content="Update: the status is now CURRENT."
+        ),
+    )
+    result = resolve_memory_choice(
+        runtime,
+        memory_records=records,
+        query="What is the current status?",
+        choices=("STALE", "CURRENT", "UNKNOWN"),
+    )
+
+    assert result.chosen_index == 1
+    assert result.chosen_text == "CURRENT"
+    assert result.adapter_active is True
+    assert len(result.selected_record_digests) == 2
+    assert len(result.retrieval_receipt_digest) == 64
+    assert result.semantic_scores[1] > result.semantic_scores[0]
+
+
+def test_resolve_memory_choice_without_records_fails_closed_to_base_view():
+    from spm_bench.memory_specialist import resolve_memory_choice
+
+    result = resolve_memory_choice(
+        _FakeRuntime(),
+        memory_records=(),
+        query="Choose one.",
+        choices=("CURRENT", "OTHER", "UNKNOWN"),
+    )
+
+    assert result.adapter_active is False
+    assert result.selected_record_digests == ()

@@ -34,7 +34,14 @@ Exact architecture is unresolved. Transformer descendants, recurrent/latent-stat
 
 ## Repository status
 
-This repository is at **research-foundation** stage. There is no implemented SPM model yet.
+This repository remains a broader **research-foundation** for SPM, but it now contains one qualified narrow prototype: a gated Qwen2.5-1.5B memory-currentness specialist. This is not yet a complete SPM model.
+
+Qualified prototype:
+
+- `artifacts/memory_adapter_qwen1p5_v1/` — qualified 8.75 MB LoRA memory specialist;
+- `src/spm_bench/memory_specialist.py` — explicit gated runtime;
+- `spm-memory-resolve` — operator CLI for three-way currentness resolution;
+- `state/adapters/SPM_MEMORY_SPECIALIST_GATED_RUNTIME_V1_QUALIFICATION.json` — frozen PASS evidence.
 
 Current documents:
 
