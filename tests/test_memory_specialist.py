@@ -38,6 +38,22 @@ def test_adapter_artifact_verification_binds_weights_and_config(tmp_path):
     )
 
 
+def test_adapter_config_verification_normalizes_windows_line_endings(tmp_path):
+    weights = tmp_path / "adapter_model.safetensors"
+    config = tmp_path / "adapter_config.json"
+    weights.write_bytes(b"qualified-weights")
+    config.write_bytes(b'{\r\n  "qualified": true\r\n}\r\n')
+
+    import hashlib
+
+    canonical_config = config.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    verify_adapter_artifacts(
+        tmp_path,
+        adapter_digest=hashlib.sha256(weights.read_bytes()).hexdigest(),
+        adapter_config_digest=hashlib.sha256(canonical_config).hexdigest(),
+    )
+
+
 def test_adapter_artifact_verification_rejects_weight_substitution(tmp_path):
     weights = tmp_path / "adapter_model.safetensors"
     config = tmp_path / "adapter_config.json"
