@@ -121,10 +121,11 @@ class MemorySpecialistRuntime:
         self.model_id = model_id
         self.base_inventory_digest = base_inventory_digest
         self.adapter_digest = adapter_digest
+        self.adapter_config_digest = adapter_config_digest
         self.microbatch = microbatch
         self.base_runtime_digest = f"{base_inventory_digest}:bnb_nf4"
         self.combined_digest = _sha256_text(
-            f"{base_inventory_digest}:{adapter_digest}:bnb_nf4"
+            f"{base_inventory_digest}:{adapter_digest}:{adapter_config_digest}:bnb_nf4"
         )
 
     @classmethod
@@ -136,6 +137,7 @@ class MemorySpecialistRuntime:
         model_id: str,
         base_inventory_digest: str,
         adapter_digest: str,
+        adapter_config_digest: str,
         microbatch: int = 3,
     ) -> "MemorySpecialistRuntime":
         verify_base_inventory(base_path, base_inventory_digest)
@@ -180,6 +182,7 @@ class MemorySpecialistRuntime:
             model_id=model_id,
             base_inventory_digest=base_inventory_digest,
             adapter_digest=adapter_digest,
+            adapter_config_digest=adapter_config_digest,
             microbatch=microbatch,
         )
 
