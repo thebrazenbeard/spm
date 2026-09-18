@@ -1,8 +1,10 @@
 # Qwen1.5B Memory Specialist V1
 
-This directory contains the first qualified SPM memory-currentness specialist.
+This directory contains the artifact set whose predecessor runtime was qualified as SPM memory-currentness specialist RC1.
 
-It is not a replacement base model. The qualified runtime is:
+The current hardening successor changes runtime artifact admission and identity binding. Its predecessor behavioral results remain historical evidence, but the hardened successor is not behaviorally/runtime qualified until a fresh qualification is bound to that successor identity.
+
+It is not a replacement base model. The predecessor qualified runtime was:
 
 - base: `Qwen/Qwen2.5-1.5B-Instruct`;
 - base runtime: 4-bit NF4;
