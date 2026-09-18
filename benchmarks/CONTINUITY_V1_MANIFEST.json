@@ -1,0 +1,1 @@
+{"case_count":24,"correct_choice_counts":{"a":8,"b":8,"c":8},"families":["alias","authority_change","correction","decision_finality","initial_assignment","preference","project_state","supersession"],"file_sha256":"a3f5d26fff7e742ce14ca0cb1e22b4bbeb28eef4f80b45d6ab664d68abed41c2","purpose":"cross-session persistence, correction burden, and stale-state drift","schema_version":1}
