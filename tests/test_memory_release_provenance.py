@@ -58,6 +58,16 @@ def test_rc1_release_binds_canonical_git_source_bytes_and_legacy_execution_bytes
         assert _sha256(_windows_execution_bytes(path)) == expected_execution
 
 
+def test_hardened_successor_does_not_inherit_predecessor_qualification():
+    release = json.loads(RELEASE.read_text(encoding="utf-8"))
+    assert release["status"] == "SUCCESSOR_REQUALIFICATION_REQUIRED"
+    assert release["predecessor_qualification"]["status"] == "QUALIFIED_RC1"
+    assert release["successor"]["behavioral_qualification"] == "NOT_EXECUTED"
+    assert release["successor"]["runtime_qualification"] == "NOT_EXECUTED"
+    assert "runtime_commit" not in release["source"]
+    assert "operator_commit" not in release["source"]
+
+
 def test_rc1_release_declares_digest_semantics():
     release = json.loads(RELEASE.read_text(encoding="utf-8"))
     semantics = release["digest_semantics"]
