@@ -1,6 +1,22 @@
 import pytest
 
-from spm_bench.memory_specialist import memory_adapter_active, verify_adapter_artifacts
+from spm_bench.memory_specialist import (\n    memory_adapter_active,\n    verify_adapter_artifacts,\n    verify_base_inventory,\n)
+
+
+def test_base_inventory_verification_binds_loaded_model_directory(tmp_path):
+    from spm_bench.hf_adapter import local_inventory_digest
+
+    base = tmp_path / "base"
+    base.mkdir()
+    (base / "config.json").write_text('{"model":"qualified"}', encoding="utf-8")
+    (base / "weights.bin").write_bytes(b"qualified-base")
+
+    expected = local_inventory_digest(base)
+    verify_base_inventory(base, expected)
+
+    (base / "weights.bin").write_bytes(b"substituted-base")
+    with pytest.raises(RuntimeError, match="base model inventory digest mismatch"):
+        verify_base_inventory(base, expected)
 
 
 def test_adapter_artifact_verification_binds_weights_and_config(tmp_path):
