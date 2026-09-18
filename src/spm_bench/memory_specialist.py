@@ -73,7 +73,9 @@ def verify_adapter_artifacts(
         raise RuntimeError("qualified adapter config is missing")
     if _sha256_file(weights_path) != expected_weights:
         raise RuntimeError("adapter weights digest mismatch")
-    if _sha256_file(config_path) != expected_config:
+    config_bytes = config_path.read_bytes()
+    canonical_config_bytes = config_bytes.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    if hashlib.sha256(canonical_config_bytes).hexdigest() != expected_config:
         raise RuntimeError("adapter config digest mismatch")
 
 
