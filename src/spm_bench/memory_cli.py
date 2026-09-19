@@ -1,4 +1,4 @@
-"""Command-line interface for the qualified gated memory specialist."""
+"""Command-line interface for the artifact-bound memory-specialist successor."""
 
 from __future__ import annotations
 
@@ -60,7 +60,8 @@ def _parser() -> argparse.ArgumentParser:
         prog="spm-memory-resolve",
         description=(
             "Resolve one of three candidate states using bounded persistent memory "
-            "and the qualified Qwen1.5B gated memory specialist."
+            "and the artifact-bound Qwen1.5B memory-specialist successor; "
+            "behavioral/runtime requalification remains required."
         ),
     )
     parser.add_argument("--base-path", type=Path, required=True)
