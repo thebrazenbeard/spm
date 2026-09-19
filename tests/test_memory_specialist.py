@@ -1,10 +1,26 @@
 import pytest
 
 from spm_bench.memory_specialist import (
+    MemorySpecialistRuntime,
     memory_adapter_active,
     verify_adapter_artifacts,
     verify_base_inventory,
 )
+
+
+def test_direct_runtime_construction_cannot_self_attest_qualified_identity():
+    with pytest.raises(
+        RuntimeError,
+        match="must be constructed through load_quantized",
+    ):
+        MemorySpecialistRuntime(
+            tokenizer=object(),
+            model=object(),
+            model_id="forged",
+            base_inventory_digest="a" * 64,
+            adapter_digest="b" * 64,
+            adapter_config_digest="c" * 64,
+        )
 
 
 def test_base_inventory_verification_binds_loaded_model_directory(tmp_path):
