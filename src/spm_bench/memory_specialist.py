@@ -11,6 +11,9 @@ from typing import Any, Sequence, Mapping
 from .hf_adapter import local_inventory_digest
 
 
+_VERIFIED_ARTIFACT_CONSTRUCTION = object()
+
+
 def memory_adapter_active(retrieved_record_count: int) -> bool:
     """Enable the specialist only when retrieval explicitly returned records."""
     if isinstance(retrieved_record_count, bool) or not isinstance(retrieved_record_count, int):
@@ -115,7 +118,12 @@ class MemorySpecialistRuntime:
         adapter_digest: str,
         adapter_config_digest: str,
         microbatch: int = 3,
+        _artifact_verification_token: object | None = None,
     ) -> None:
+        if _artifact_verification_token is not _VERIFIED_ARTIFACT_CONSTRUCTION:
+            raise RuntimeError(
+                "MemorySpecialistRuntime must be constructed through load_quantized()"
+            )
         if microbatch <= 0:
             raise ValueError("microbatch must be positive")
         self.tokenizer = tokenizer
@@ -186,6 +194,7 @@ class MemorySpecialistRuntime:
             adapter_digest=adapter_digest,
             adapter_config_digest=adapter_config_digest,
             microbatch=microbatch,
+            _artifact_verification_token=_VERIFIED_ARTIFACT_CONSTRUCTION,
         )
 
     def view_for_retrieval(self, retrieved_record_count: int) -> _MemorySpecialistView:
