@@ -68,6 +68,13 @@ def test_hardened_successor_does_not_inherit_predecessor_qualification():
     assert "operator_commit" not in release["source"]
 
 
+def test_operator_cli_does_not_claim_hardened_successor_is_qualified():
+    cli = (ROOT / "src/spm_bench/memory_cli.py").read_text(encoding="utf-8").lower()
+    assert "qualified gated memory specialist" not in cli
+    assert "qualified qwen1.5b" not in cli
+    assert "requalification remains required" in cli
+
+
 def test_rc1_release_declares_digest_semantics():
     release = json.loads(RELEASE.read_text(encoding="utf-8"))
     semantics = release["digest_semantics"]
