@@ -1,0 +1,2 @@
+benchmarks/*.jsonl text eol=lf
+training/*.jsonl text eol=lf
