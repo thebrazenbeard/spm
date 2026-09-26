@@ -1,0 +1,1 @@
+{"generation_config":{},"model":{"artifact_id":"Qwen/Qwen2.5-0.5B-Instruct","immutable_revision":"7ae557604adf67be50417f59c2c2f167def9a775","inventory_digest":"6080fc05cb5e0ccfa35e64523b11a902cc1f3e35672f85135a19eb16b722f8b8"},"parameter_count":null,"tokenizer":{"artifact_id":"Qwen/Qwen2.5-0.5B-Instruct","immutable_revision":"7ae557604adf67be50417f59c2c2f167def9a775"}}
