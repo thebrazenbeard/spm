@@ -24,9 +24,7 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: "3.11"
-      - name: Install exact checkout and test dependency
-        run: |
-          python -m pip install -e .
-          python -m pip install "pytest>=8"
+      - name: Install exact checkout and qualification dependencies
+        run: python -m pip install -e ".[test]"
       - name: Run SPM tests
         run: python -m pytest -q
