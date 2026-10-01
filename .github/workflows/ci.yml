@@ -1,0 +1,32 @@
+name: SPM exact-source qualification
+
+on:
+  push:
+    branches:
+      - qualification/exact-main-ci-v1-20260930
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact subject
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Set up Python 3.11
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.11"
+      - name: Install exact checkout and test dependency
+        run: |
+          python -m pip install -e .
+          python -m pip install "pytest>=8"
+      - name: Run SPM tests
+        run: python -m pytest -q
