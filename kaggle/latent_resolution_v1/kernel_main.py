@@ -15,6 +15,7 @@ import time
 SPM_COMMIT = "dbd4cb10be61711b349ccad5c900037d7ac68ea1"
 MODEL_ID = "Qwen/Qwen2.5-0.5B-Instruct"
 MODEL_REVISION = "7ae557604adf67be50417f59c2c2f167def9a775"
+MODEL_INVENTORY_DIGEST = "6080fc05cb5e0ccfa35e64523b11a902cc1f3e35672f85135a19eb16b722f8b8"
 CLAIM_CEILING = "KAGGLE_EXPERIMENT_ONLY_NOT_VERA_RUNTIME_OR_PRODUCTION_VRAM_PROOF"
 
 SCHEMA = "SPM_LATENT_RESOLUTION_KAGGLE_V1"
@@ -121,6 +122,7 @@ def build_dry_run_manifest() -> dict[str, object]:
         "spm_commit": SPM_COMMIT,
         "model_id": MODEL_ID,
         "model_revision": MODEL_REVISION,
+        "model_inventory_digest": MODEL_INVENTORY_DIGEST,
         "slot_budgets": list(SLOT_BUDGETS),
         "train_seed": TRAIN_SEED,
         "dev_seed": DEV_SEED,
@@ -158,6 +160,24 @@ def _ensure_transformers() -> None:
         ],
         check=True,
     )
+
+
+def _download_verified_snapshot() -> tuple[Path, str]:
+    from huggingface_hub import snapshot_download
+    from spm_bench.hf_adapter import local_inventory_digest
+
+    snapshot = Path(
+        snapshot_download(
+            repo_id=MODEL_ID,
+            revision=MODEL_REVISION,
+        )
+    )
+    inventory_digest = local_inventory_digest(snapshot)
+    if inventory_digest != MODEL_INVENTORY_DIGEST:
+        raise RuntimeError(
+            "downloaded model inventory digest does not match the bound SPM baseline subject"
+        )
+    return snapshot, inventory_digest
 
 
 def _configure_seed(torch, seed: int) -> None:
@@ -572,18 +592,19 @@ def run_experiment(output_path: Path) -> dict[str, object]:
 
     train_examples, dev_examples = _experiment_examples()
     manifest = build_dry_run_manifest()
+    snapshot_path, runtime_inventory_digest = _download_verified_snapshot()
 
     tokenizer = AutoTokenizer.from_pretrained(
-        MODEL_ID,
-        revision=MODEL_REVISION,
+        str(snapshot_path),
+        local_files_only=True,
         trust_remote_code=False,
     )
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token = tokenizer.eos_token
 
     model = AutoModelForCausalLM.from_pretrained(
-        MODEL_ID,
-        revision=MODEL_REVISION,
+        str(snapshot_path),
+        local_files_only=True,
         trust_remote_code=False,
         torch_dtype=torch.float16,
     )
@@ -633,6 +654,7 @@ def run_experiment(output_path: Path) -> dict[str, object]:
                 "spm_commit": SPM_COMMIT,
                 "model_id": MODEL_ID,
                 "model_revision": MODEL_REVISION,
+                "model_inventory_digest": runtime_inventory_digest,
                 "slot_budget": slot_budget,
                 "max_chunks": MAX_CHUNKS,
                 "hidden_size": hidden_size,
@@ -672,6 +694,7 @@ def run_experiment(output_path: Path) -> dict[str, object]:
             "transformers": transformers.__version__,
         },
         "hardware": _hardware_report(torch, device),
+        "runtime_model_inventory_digest": runtime_inventory_digest,
         "hidden_size": hidden_size,
         "train_source_tokens_total": train_source_tokens,
         "dev_source_tokens_total": dev_source_tokens,

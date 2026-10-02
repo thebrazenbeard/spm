@@ -26,6 +26,7 @@ def test_kernel_binds_exact_spm_and_qwen_subjects():
     assert module.SPM_COMMIT == "dbd4cb10be61711b349ccad5c900037d7ac68ea1"
     assert module.MODEL_ID == "Qwen/Qwen2.5-0.5B-Instruct"
     assert module.MODEL_REVISION == "7ae557604adf67be50417f59c2c2f167def9a775"
+    assert module.MODEL_INVENTORY_DIGEST == "6080fc05cb5e0ccfa35e64523b11a902cc1f3e35672f85135a19eb16b722f8b8"
     assert module.CLAIM_CEILING == "KAGGLE_EXPERIMENT_ONLY_NOT_VERA_RUNTIME_OR_PRODUCTION_VRAM_PROOF"
 
 
@@ -39,6 +40,7 @@ def test_dry_run_manifest_is_deterministic_and_requires_no_gpu_or_network():
     assert first["schema"] == "SPM_LATENT_RESOLUTION_KAGGLE_V1"
     assert first["spm_commit"] == module.SPM_COMMIT
     assert first["model_revision"] == module.MODEL_REVISION
+    assert first["model_inventory_digest"] == module.MODEL_INVENTORY_DIGEST
     assert first["slot_budgets"] == [2, 4, 8, 16]
     assert first["train_case_count"] > first["dev_case_count"] > 0
     assert len(first["train_subject_digest"]) == 64
