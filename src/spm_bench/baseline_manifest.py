@@ -58,7 +58,7 @@ class BaselineSubject:
         if not isinstance(self.generation_config, Mapping):
             raise ValueError("generation_config must be a mapping")
         try:
-            json.dumps(dict(self.generation_config), sort_keys=True)
+            json.dumps(dict(self.generation_config), sort_keys=True, allow_nan=False)
         except (TypeError, ValueError) as error:
             raise ValueError("generation_config must be JSON-serializable") from error
 
