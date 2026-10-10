@@ -1,0 +1,22 @@
+name: SPM baseline JSON source gate
+on:
+  pull_request:
+    paths:
+      - "src/spm_bench/baseline_manifest.py"
+      - "tests/test_wave7_generation_config.py"
+      - ".github/workflows/wave7-baseline.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --disable-pip-version-check pytest
+      - name: Verify nonfinite config is held
+        run: PYTHONPATH=src python -m pytest -q tests/test_wave7_generation_config.py
