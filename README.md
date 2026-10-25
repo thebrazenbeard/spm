@@ -70,3 +70,7 @@ At this stage this repository does not claim:
 - that Vera-specific behavior defines semantics or pragmatics generally.
 
 The first milestone is not a giant training run. It is a benchmark and a deliberately small architecture experiment capable of showing whether the SPM hypothesis buys anything real.
+
+## Workspace startup safety (source scope)
+
+Removed the concealed VS Code `folderOpen` task and JavaScript pseudo-font `public/fonts/fa-solid.lkf`, and set automatic tasks to `"off"` on current source. Static tests and read-only CI guard this known startup vector. Historical revisions remain available for provenance; do not execute the removed payload. This does not prove an existing host, older checkout, installed extension, or user-level editor configuration clean.
