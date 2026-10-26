@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import pytest
 
 from spm_bench.arm_m_memory import ArmMMemory, MemoryRecord
@@ -24,6 +25,29 @@ def test_memory_record_identity_is_deterministic_and_rejects_model_output():
     assert len(one.digest) == 64
     with pytest.raises(ValueError, match="exogenous"):
         record(2, "assistant generated answer", source="assistant")
+
+
+def test_direct_record_construction_cannot_forge_source_or_digest():
+    legitimate = record(1, "Original exogenous observation")
+    with pytest.raises(ValueError, match="exogenous"):
+        MemoryRecord(
+            sequence=1, source_class="assistant", content="model assertion",
+            digest="0" * 64,
+        )
+    with pytest.raises(ValueError, match="digest"):
+        MemoryRecord(
+            sequence=1, source_class="user", content="forged evidence",
+            digest="0" * 64,
+        )
+    with pytest.raises(ValueError, match="digest"):
+        replace(legitimate, content="tampered observation")
+    assert MemoryRecord(
+        sequence=legitimate.sequence,
+        source_class=legitimate.source_class,
+        content=legitimate.content,
+        digest=legitimate.digest,
+    ) == legitimate
+    assert ArmMMemory.empty().append(legitimate, byte_ceiling=4096).records == (legitimate,)
 
 
 def test_append_is_idempotent_and_conflicting_sequence_fails_closed():
