@@ -36,14 +36,26 @@ Exact architecture is unresolved. Transformer descendants, recurrent/latent-stat
 
 ## Repository status
 
-This repository remains a broader **research-foundation** for SPM, but it now contains one qualified narrow prototype: a gated Qwen2.5-1.5B memory-currentness specialist. This is not yet a complete SPM model.
+This repository remains a broader **research-foundation** for SPM. A gated
+Qwen2.5-1.5B memory-currentness specialist has a historically qualified RC1
+predecessor; its subsequently hardened source/runtime successor is **not yet
+behaviorally or operationally requalified**. This is not a complete SPM model.
 
 Qualified prototype:
 
-- `artifacts/memory_adapter_qwen1p5_v1/` — qualified 8.75 MB LoRA memory specialist;
+- `artifacts/memory_adapter_qwen1p5_v1/` — 8.75 MB LoRA specialist with frozen
+  predecessor qualification and successor requalification pending;
 - `src/spm_bench/memory_specialist.py` — explicit gated runtime;
 - `spm-memory-resolve` — operator CLI for three-way currentness resolution;
 - `state/adapters/SPM_MEMORY_SPECIALIST_GATED_RUNTIME_V1_QUALIFICATION.json` — frozen PASS evidence.
+
+`MemoryRecord` verifies that its stored digest agrees with its record bytes
+and rejects non-exogenous source-class labels even through direct construction.
+Those checks establish **structural integrity of caller-provided records**, not
+independent observation custody: an unauthenticated caller can still describe
+its own text as a `user` observation. External retrieval (including WeKnora)
+requires separate source/ACL/index provenance and admission before any memory
+or learned-state claim.
 
 Current documents:
 
