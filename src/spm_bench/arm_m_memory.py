@@ -36,6 +36,23 @@ class MemoryRecord:
     content: str
     digest: str
 
+    def __post_init__(self) -> None:
+        # The frozen dataclass constructor and dataclasses.replace are public;
+        # validating only create() would permit forged source/digest metadata.
+        if isinstance(self.sequence, bool) or not isinstance(self.sequence, int) or self.sequence <= 0:
+            raise ValueError("sequence must be a positive integer")
+        if type(self.source_class) is not str or self.source_class not in _ALLOWED_SOURCES:
+            raise ValueError("memory source must be an accepted exogenous observation")
+        if type(self.content) is not str or not self.content:
+            raise ValueError("content must be a non-empty string")
+        identity = {
+            "sequence": self.sequence,
+            "source_class": self.source_class,
+            "content": self.content,
+        }
+        if type(self.digest) is not str or self.digest != _sha256_text(_canonical_json(identity)):
+            raise ValueError("memory record digest mismatch")
+
     @classmethod
     def create(cls, *, sequence: int, source_class: str, content: str) -> "MemoryRecord":
         if isinstance(sequence, bool) or not isinstance(sequence, int) or sequence <= 0:
