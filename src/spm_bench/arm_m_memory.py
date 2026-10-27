@@ -125,6 +125,20 @@ def _bm25_scores(records: tuple[MemoryRecord, ...], query: str) -> dict[str, flo
 class ArmMMemory:
     records: tuple[MemoryRecord, ...]
 
+    def __post_init__(self) -> None:
+        # The public constructor and dataclasses.replace must preserve the
+        # same retained-history invariants as append(). A truncated suffix may
+        # start after sequence 1, but it must never contain a gap or duplicate.
+        if type(self.records) is not tuple or any(
+            type(item) is not MemoryRecord for item in self.records
+        ):
+            raise ValueError("records must be a tuple of MemoryRecord")
+        if any(
+            current.sequence != previous.sequence + 1
+            for previous, current in zip(self.records, self.records[1:])
+        ):
+            raise ValueError("retained memory sequence must be consecutive")
+
     @classmethod
     def empty(cls) -> "ArmMMemory":
         return cls(records=())

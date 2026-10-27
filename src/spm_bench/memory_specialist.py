@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from contextlib import nullcontext
 import hashlib
+import math
 from pathlib import Path
 from typing import Any, Sequence, Mapping
 
@@ -352,12 +353,18 @@ def resolve_memory_choice(
 
     totals = [0.0, 0.0, 0.0]
     for (order, assigned), row in zip(layouts, score_rows, strict=True):
-        if set(row) != set(labels):
+        if not isinstance(row, Mapping) or set(row) != set(labels):
             raise RuntimeError("score row did not cover declared labels")
+        probabilities = tuple(row[label] for label in labels)
+        if any(
+            type(score) is not float or not math.isfinite(score) or not 0.0 <= score <= 1.0
+            for score in probabilities
+        ) or not math.isclose(sum(probabilities), 1.0, abs_tol=1e-5, rel_tol=0.0):
+            raise RuntimeError("score row must contain finite probabilities summing to one")
         for label in labels:
             position = assigned.index(label)
             semantic_index = order[position]
-            totals[semantic_index] += float(row[label])
+            totals[semantic_index] += row[label]
     semantic_scores = tuple(value / len(layouts) for value in totals)
     best = max(semantic_scores)
     winners = [

@@ -50,6 +50,22 @@ def test_direct_record_construction_cannot_forge_source_or_digest():
     assert ArmMMemory.empty().append(legitimate, byte_ceiling=4096).records == (legitimate,)
 
 
+def test_public_memory_constructor_rejects_noncanonical_retained_history():
+    first, second, third = (record(i, f"observation {i}") for i in (1, 2, 3))
+    with pytest.raises(ValueError, match="consecutive"):
+        ArmMMemory(records=(first, third))
+    with pytest.raises(ValueError, match="consecutive"):
+        replace(ArmMMemory(records=(first, second)), records=(first, third))
+    with pytest.raises((ValueError, TypeError), match="records"):
+        ArmMMemory(records=[first, second])
+    with pytest.raises((ValueError, TypeError), match="records"):
+        ArmMMemory(records=(first, "unverified"))
+
+    # Oldest-first bounded eviction is legal: a retained suffix need not start at 1.
+    retained = ArmMMemory(records=(second, third))
+    assert [item.sequence for item in retained.records] == [2, 3]
+
+
 def test_append_is_idempotent_and_conflicting_sequence_fails_closed():
     memory = ArmMMemory.empty().append(record(1, "alpha"), byte_ceiling=4096)
     assert memory.append(record(1, "alpha"), byte_ceiling=4096) == memory

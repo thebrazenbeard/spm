@@ -51,6 +51,11 @@ Qualified prototype:
 
 `MemoryRecord` verifies that its stored digest agrees with its record bytes
 and rejects non-exogenous source-class labels even through direct construction.
+The candidate runtime also rejects nonconsecutive retained memory supplied
+through `ArmMMemory`'s public constructor, and refuses nonfinite, out-of-range,
+unnormalized, or nonnumeric specialist probability rows before producing a
+semantic resolution. These are source-level input-integrity checks; the
+hardened successor's neural behavior still requires independent requalification.
 Those checks establish **structural integrity of caller-provided records**, not
 independent observation custody: an unauthenticated caller can still describe
 its own text as a `user` observation. External retrieval (including WeKnora)
