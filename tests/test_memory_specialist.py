@@ -192,3 +192,58 @@ def test_resolve_memory_choice_without_records_fails_closed_to_base_view():
 
     assert result.adapter_active is False
     assert result.selected_record_digests == ()
+
+
+@pytest.mark.parametrize("bad_score", [float("nan"), float("inf"), -0.1, 1.1, True, "0.2"])
+def test_resolution_rejects_malformed_specialist_probabilities(bad_score):
+    from spm_bench.memory_specialist import resolve_memory_choice
+
+    class BadView:
+        memory_active = False
+
+        def score_many_selected(self, message_batches, choice_ids):
+            return tuple(
+                {choice_ids[0]: bad_score, choice_ids[1]: 0.4, choice_ids[2]: 0.3}
+                for _ in message_batches
+            )
+
+    class BadRuntime:
+        tokenizer = _WordTokenizer()
+
+        def view_for_retrieval(self, retrieved_record_count):
+            return BadView()
+
+    with pytest.raises(RuntimeError, match="finite probabilities"):
+        resolve_memory_choice(
+            BadRuntime(),
+            memory_records=(),
+            query="Current state?",
+            choices=("A", "B", "C"),
+        )
+
+
+def test_resolution_rejects_unnormalized_specialist_probability_row():
+    from spm_bench.memory_specialist import resolve_memory_choice
+
+    class UnnormalizedView:
+        memory_active = False
+
+        def score_many_selected(self, message_batches, choice_ids):
+            return tuple(
+                {choice_ids[0]: 0.4, choice_ids[1]: 0.4, choice_ids[2]: 0.4}
+                for _ in message_batches
+            )
+
+    class UnnormalizedRuntime:
+        tokenizer = _WordTokenizer()
+
+        def view_for_retrieval(self, retrieved_record_count):
+            return UnnormalizedView()
+
+    with pytest.raises(RuntimeError, match="summing to one"):
+        resolve_memory_choice(
+            UnnormalizedRuntime(),
+            memory_records=(),
+            query="Current state?",
+            choices=("A", "B", "C"),
+        )
