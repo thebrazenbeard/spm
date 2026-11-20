@@ -65,3 +65,9 @@ Vera was one origin of the research questions; no model's name, role, identity, 
 ## Workspace startup safety (source scope)
 
 The current source removed a concealed VS Code `folderOpen` task and a JavaScript pseudo-font `public/fonts/fa-solid.lkf`, and sets automatic tasks to `"off"`. Static tests and read-only CI guard this known startup vector. Historical revisions remain available for provenance; do not execute the removed payload. This does not prove that any previously used host, older checkout, installed extension or editor-wide configuration is clean.
+
+## Editor startup containment — tracked source (2026-11-20)
+
+The tracked `main` source formerly contained a concealed VS Code `folderOpen` task invoking obfuscated `.vscode/ini` through Node. The task list is now empty, `task.allowAutomaticTasks` is explicitly `"off"`, and the obfuscated file is removed from this source tree. Historical Git source remains for investigation.
+
+**Limits:** This is source-only containment, not proof that older checkouts, editor extensions, user/global settings, local credentials, or any previous host execution are safe. Do not execute historical suspect assets.
